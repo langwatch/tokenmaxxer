@@ -1,0 +1,2 @@
+playground/src/pages/*
+!playground/src/pages/home.tsx
