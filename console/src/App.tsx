@@ -229,8 +229,10 @@ export default function App() {
         </div>
       )}
 
-      <main className="grid min-h-0 flex-1 grid-cols-1 gap-6 p-6 lg:grid-cols-[1fr_2fr]">
-        <div className="flex min-h-0 flex-col gap-6">
+      {/* minmax(0,…): a bare fr track's min-content sizing lets one long
+          unbreakable tool-arg string blow the whole layout apart */}
+      <main className="grid min-h-0 flex-1 grid-cols-1 gap-6 p-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
+        <div className="flex min-h-0 min-w-0 flex-col gap-6">
           <Transcript state={state} />
           <ToolFeed state={state} />
           <FleetPanel state={state} />

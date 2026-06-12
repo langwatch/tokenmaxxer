@@ -43,7 +43,9 @@ export class InworldUpstream extends EventEmitter {
         return;
       }
       if (evt.type === "session.created") {
-        this.sendRaw({ type: "session.update", session: this.sessionConfig });
+        // Direct send: this is the handshake that *produces* readiness —
+        // it must bypass the until-ready queue or nothing ever flows.
+        this.directSend({ type: "session.update", session: this.sessionConfig });
         return; // session.created is internal; clients get their own
       }
       if (evt.type === "session.updated" && !this.ready) {
@@ -103,10 +105,34 @@ export class InworldUpstream extends EventEmitter {
 
   updateSession(sessionConfig: Record<string, unknown>) {
     this.sessionConfig = sessionConfig;
-    this.sendRaw({ type: "session.update", session: sessionConfig });
+    this.directSend({ type: "session.update", session: sessionConfig });
   }
 
+  private directSend(obj: unknown) {
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify(obj));
+    }
+  }
+
+  private pendingUntilReady: unknown[] = [];
+
+  /**
+   * Send upstream, queueing until the session config is acknowledged —
+   * clients (the console's greet, the test adapter's first turn) race the
+   * upstream connection and silently-dropped messages are unfindable bugs.
+   */
   sendRaw(obj: unknown) {
+    if (!this.ready) {
+      this.pendingUntilReady.push(obj);
+      if (this.pendingUntilReady.length === 1) {
+        this.once("ready", () => {
+          const queue = this.pendingUntilReady;
+          this.pendingUntilReady = [];
+          for (const msg of queue) this.sendRaw(msg);
+        });
+      }
+      return;
+    }
     if (this.ws?.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify(obj));
     }

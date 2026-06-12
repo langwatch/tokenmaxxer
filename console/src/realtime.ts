@@ -87,7 +87,6 @@ export class RoomClient {
 
     ws.onopen = () => {
       this.update({ connection: "live", statusMessage: null });
-      ws.send(JSON.stringify({ type: "tokenmaxxer.greet" }));
     };
     ws.onclose = () => {
       if (!this.shouldReconnect) return;
@@ -145,8 +144,17 @@ export class RoomClient {
     );
   }
 
+  private greeted = false;
+
   private onEvent(evt: Record<string, unknown>) {
     switch (evt.type) {
+      case "session.created":
+        // Voice convention: Max greets the room once it's actually live.
+        if (!this.greeted) {
+          this.greeted = true;
+          this.ws?.send(JSON.stringify({ type: "tokenmaxxer.greet" }));
+        }
+        break;
       case "response.output_audio.delta": {
         const bytes = Uint8Array.from(atob(String(evt.delta ?? "")), (c) =>
           c.charCodeAt(0),
