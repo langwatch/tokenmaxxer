@@ -1,0 +1,17 @@
+{
+  "name": "tokenmaxxer",
+  "private": true,
+  "version": "0.1.0",
+  "description": "The meeting room that ships while you talk — unlimited compute, unlimited tokens, zero hesitation.",
+  "scripts": {
+    "dev": "pnpm -r --parallel dev",
+    "build": "pnpm -r build",
+    "test": "pnpm -r test",
+    "typecheck": "pnpm -r typecheck"
+  },
+  "engines": {
+    "node": ">=20",
+    "pnpm": ">=9"
+  },
+  "packageManager": "pnpm@10.30.3"
+}

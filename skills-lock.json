@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "skills": {
+    "evaluations": {
+      "source": "langwatch/skills",
+      "sourceType": "github",
+      "skillPath": "evaluations/SKILL.md",
+      "computedHash": "3ff0402d44c44721d88d9c8320199bd43c3f1ee7e5ef89a632d58afbb0a0fa22"
+    },
+    "scenarios": {
+      "source": "langwatch/skills",
+      "sourceType": "github",
+      "skillPath": "scenarios/SKILL.md",
+      "computedHash": "efef9ee0aba7fd3bea24d2a081ce91d2d8035d31a7708d9890b345010f174270"
+    },
+    "tracing": {
+      "source": "langwatch/skills",
+      "sourceType": "github",
+      "skillPath": "tracing/SKILL.md",
+      "computedHash": "b5f6f07de9e8ec4ba35074a8bdc503c6f86a4735aa05bd60f4f0dd87ef83c762"
+    }
+  }
+}
