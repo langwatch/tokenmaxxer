@@ -16,6 +16,9 @@ export const config = {
     `wss://api.inworld.ai/api/v1/realtime/session?key=voice-${Date.now()}&protocol=realtime`,
   inworldModel:
     process.env.INWORLD_MODEL ?? "inworld/models/gemma-4-26b-a4b-it",
+  /** Used when the primary model reports capacity exhaustion repeatedly. */
+  inworldFallbackModel:
+    process.env.INWORLD_FALLBACK_MODEL ?? "google-ai-studio/gemini-2.5-flash",
   inworldVoice: process.env.INWORLD_VOICE ?? "Jason",
 
   anthropicApiKey: required("ANTHROPIC_API_KEY"),

@@ -68,8 +68,9 @@ export const TOOL_SCHEMAS = [
         path: {
           type: "string",
           description:
-            "URL slug for the page, lowercase kebab-case, e.g. 'pricing' or " +
-            "'cat-onboarding'.",
+            "URL slug for the new page, lowercase kebab-case, descriptive, " +
+            "e.g. 'pricing' or 'purrbnb-landing'. Never 'home' — that is " +
+            "the protected site index.",
         },
         description: {
           type: "string",
@@ -108,8 +109,9 @@ export const TOOL_SCHEMAS = [
     type: "function",
     name: "open_page",
     description:
-      "Navigate the room screen to a page of the prototype site. Call after " +
-      "write_page or edit_page, or when the team asks to see a page.",
+      "Navigate the room screen to a page that ALREADY EXISTS on the " +
+      "prototype site. For a page that does not exist yet, call write_page " +
+      "instead — never open_page.",
     parameters: {
       type: "object",
       properties: {

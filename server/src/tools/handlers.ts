@@ -47,6 +47,17 @@ const handlers: Record<string, Handler> = {
 
   async write_page(args) {
     const slug = slugify(String(args.path ?? ""));
+    if (slug === "home") {
+      return {
+        output: {
+          status: "protected",
+          note:
+            "/home is the site index and cannot be overwritten. Call " +
+            "write_page again with a descriptive new slug (e.g. " +
+            "'purrbnb-landing').",
+        },
+      };
+    }
     const description = String(args.description ?? "");
     const result = await generatePageCode(writePageRequest(slug, description));
     fs.mkdirSync(path.dirname(pageFile(slug)), { recursive: true });
@@ -94,6 +105,19 @@ const handlers: Record<string, Handler> = {
   async open_page(args) {
     const raw = String(args.path ?? "home");
     const slug = raw === "home" || raw === "/" ? "" : slugify(raw);
+    if (slug && !fs.existsSync(pageFile(slug))) {
+      // Teach the model instead of pretending: it will self-correct to
+      // write_page in the same conversation.
+      const pages = listPages();
+      return {
+        output: {
+          status: "not_found",
+          note:
+            `No page "/${slug}" exists yet. Existing pages: ` +
+            `${pages.join(", ") || "(none)"}. Call write_page to create it.`,
+        },
+      };
+    }
     return {
       output: { status: "shown", page: `/${slug}` },
       navigate: `/${slug}`,

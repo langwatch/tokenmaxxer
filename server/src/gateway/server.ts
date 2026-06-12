@@ -7,6 +7,7 @@ import { InworldUpstream, type RealtimeEvent } from "../inworld/upstream.js";
 import { log } from "../log.js";
 import { fleet } from "../orchestrator/fleet.js";
 import { MAX_GREETING } from "../persona.js";
+import { transcribePcm } from "./stt-shim.js";
 import { executeTool } from "../tools/handlers.js";
 import { buildSessionConfig, type ClientSessionRequest } from "./session-config.js";
 
@@ -31,6 +32,19 @@ class GatewaySession {
   private droppedMalformedThisResponse = false;
   private audioThisResponse = false;
   private recoveryAttempts = 0;
+  // Capacity resilience: transient "model at capacity" errors are retried;
+  // repeated ones switch the session to the fallback model so the room
+  // never goes dead.
+  private capacityErrors = 0;
+  private onFallbackModel = false;
+  private lastClientSessionRequest: ClientSessionRequest | null = null;
+  // Manual-turn mode (scenario tests): Inworld does not transcribe
+  // committed audio when turn_detection is null, so the gateway buffers
+  // the turn's audio and injects a whisper transcript as text instead.
+  private manualTurns = false;
+  private manualAudioBuf: Buffer[] = [];
+  private pendingManualCommit = false;
+  private pendingResponseCreate = false;
 
   constructor(private client: WebSocket) {
     this.upstream = new InworldUpstream(buildSessionConfig());
@@ -78,11 +92,52 @@ class GatewaySession {
     } catch {
       return;
     }
+    if (process.env.TOKENMAXXER_WIRE_LOG) {
+      log("wire", `client→ ${msg.type}`);
+    }
 
     switch (msg.type) {
       case "session.update": {
         const requested = (msg as { session?: ClientSessionRequest }).session ?? null;
-        this.upstream.updateSession(buildSessionConfig(requested));
+        this.lastClientSessionRequest = requested;
+        this.manualTurns =
+          requested?.audio?.input != null &&
+          "turn_detection" in requested.audio.input &&
+          requested.audio.input.turn_detection === null;
+        this.upstream.updateSession(
+          buildSessionConfig(
+            requested,
+            this.onFallbackModel ? config.inworldFallbackModel : undefined,
+          ),
+        );
+        break;
+      }
+      case "input_audio_buffer.append": {
+        if (!this.manualTurns) {
+          this.upstream.sendRaw(msg);
+          break;
+        }
+        this.manualAudioBuf.push(
+          Buffer.from(String((msg as { audio?: string }).audio ?? ""), "base64"),
+        );
+        break;
+      }
+      case "input_audio_buffer.commit": {
+        if (!this.manualTurns) {
+          this.upstream.sendRaw(msg);
+          break;
+        }
+        void this.commitManualTurn();
+        break;
+      }
+      case "response.create": {
+        if (this.manualTurns && this.pendingManualCommit) {
+          // The transcript injection is async; hold the response until the
+          // user item is actually upstream.
+          this.pendingResponseCreate = true;
+          break;
+        }
+        this.upstream.sendRaw(msg);
         break;
       }
       case "tokenmaxxer.greet":
@@ -100,6 +155,9 @@ class GatewaySession {
   }
 
   private onUpstream(evt: RealtimeEvent) {
+    if (process.env.TOKENMAXXER_WIRE_LOG && evt.type !== "response.output_audio.delta") {
+      log("wire", `←upstream ${evt.type}${evt.type === "error" ? " " + JSON.stringify(evt.error) : ""}`);
+    }
     // Tool calls are the gateway's job — execute, respond, keep talking.
     // Two wire shapes describe the same call; whichever arrives complete
     // first wins, deduped on call_id. Nameless/id-less events are dropped:
@@ -128,6 +186,10 @@ class GatewaySession {
     if (evt.type === "response.output_audio.delta") {
       this.audioThisResponse = true;
       this.recoveryAttempts = 0;
+      this.capacityErrors = 0;
+    }
+    if (evt.type === "error" && this.handleCapacityError(evt)) {
+      return; // handled — the client never sees transient capacity blips
     }
     if (
       evt.type === "response.done" &&
@@ -142,6 +204,81 @@ class GatewaySession {
 
     this.captureTranscripts(evt);
     this.sendToClient(evt);
+  }
+
+  /**
+   * Manual-turn commit: whisper the buffered audio, inject the transcript
+   * upstream as a text item, surface the transcription event to the client
+   * (the adapter records it as the user transcript), then release any held
+   * response.create.
+   */
+  private async commitManualTurn(): Promise<void> {
+    this.pendingManualCommit = true;
+    const pcm = Buffer.concat(this.manualAudioBuf);
+    this.manualAudioBuf = [];
+    let text = "";
+    try {
+      text = await transcribePcm(pcm);
+    } catch (err) {
+      log("stt-shim", `transcription failed: ${(err as Error).message}`);
+    }
+    if (!text) text = "[inaudible]";
+    log("gateway", `manual turn transcribed: "${text}"`);
+
+    this.upstream.sendRaw({
+      type: "conversation.item.create",
+      item: {
+        type: "message",
+        role: "user",
+        content: [{ type: "input_text", text }],
+      },
+    });
+    this.sendToClient({
+      type: "conversation.item.input_audio_transcription.completed",
+      transcript: text,
+    });
+    // The injected item echoes back from upstream; captureTranscripts
+    // broadcasts it from there, same as a plain text turn.
+
+    this.pendingManualCommit = false;
+    if (this.pendingResponseCreate) {
+      this.pendingResponseCreate = false;
+      this.upstream.sendRaw({ type: "response.create" });
+    }
+  }
+
+  /** Returns true when the error was a capacity blip and is being handled. */
+  private handleCapacityError(evt: RealtimeEvent): boolean {
+    const message = String(
+      (evt as { error?: { message?: string } }).error?.message ?? "",
+    );
+    if (!/at capacity|ResourceExhausted|temporarily/i.test(message)) {
+      return false;
+    }
+    this.capacityErrors++;
+    if (this.capacityErrors <= 2) {
+      log("gateway", `model at capacity (attempt ${this.capacityErrors}) — retrying`);
+      broadcast({
+        type: "tokenmaxxer.status",
+        message: "model at capacity — retrying",
+      });
+      setTimeout(() => this.upstream.sendRaw({ type: "response.create" }), 1200);
+      return true;
+    }
+    if (!this.onFallbackModel) {
+      this.onFallbackModel = true;
+      log("gateway", `switching session to fallback model ${config.inworldFallbackModel}`);
+      broadcast({
+        type: "tokenmaxxer.status",
+        message: `primary model at capacity — switched to ${config.inworldFallbackModel}`,
+      });
+      this.upstream.updateSession(
+        buildSessionConfig(this.lastClientSessionRequest, config.inworldFallbackModel),
+      );
+      setTimeout(() => this.upstream.sendRaw({ type: "response.create" }), 500);
+      return true;
+    }
+    return false; // fallback also failing — surface the error
   }
 
   private maybeExecuteToolCall(

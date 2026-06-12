@@ -25,6 +25,7 @@ export interface ClientSessionRequest {
 
 export function buildSessionConfig(
   client: ClientSessionRequest | null = null,
+  modelOverride?: string,
 ): Record<string, unknown> {
   const turnDetection =
     client?.audio?.input && "turn_detection" in client.audio.input
@@ -33,7 +34,7 @@ export function buildSessionConfig(
 
   return {
     type: "realtime",
-    model: config.inworldModel,
+    model: modelOverride ?? config.inworldModel,
     instructions: MAX_INSTRUCTIONS,
     output_modalities: ["audio"],
     tools: TOOL_SCHEMAS,
