@@ -6,6 +6,7 @@ import type { TokenmaxxerEvent } from "../events.js";
 import { InworldUpstream, type RealtimeEvent } from "../inworld/upstream.js";
 import { log } from "../log.js";
 import { fleet } from "../orchestrator/fleet.js";
+import { tracer } from "../observability.js";
 import { MAX_GREETING } from "../persona.js";
 import { transcribePcm } from "./stt-shim.js";
 import { executeTool } from "../tools/handlers.js";
@@ -356,7 +357,13 @@ class GatewaySession {
     const t0 = Date.now();
     let output: Record<string, unknown>;
     try {
-      const outcome = await executeTool(name, args);
+      const outcome = await tracer.withActiveSpan(`tool.${name}`, async (span) => {
+        span.setType("tool");
+        span.setInput(args);
+        const result = await executeTool(name, args);
+        span.setOutput(result.output);
+        return result;
+      });
       output = outcome.output;
       if (outcome.navigate !== undefined) {
         broadcast({ type: "tokenmaxxer.navigate", path: outcome.navigate });

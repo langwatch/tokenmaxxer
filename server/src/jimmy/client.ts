@@ -1,5 +1,6 @@
 import { config } from "../config.js";
 import { log } from "../log.js";
+import { tracer } from "../observability.js";
 import {
   PAGE_SYSTEM_PROMPT,
   editPagePrompt,
@@ -25,9 +26,20 @@ interface SpeedModel {
 }
 
 /**
- * The speed chain: fastest first, smarter fallbacks after. Order is
- * grounded in the codegen experiment (see tests/experiments) — jimmy wins
- * on latency by an order of magnitude; the fallbacks cover its misses.
+ * The speed chain: fastest first, smarter fallbacks after. Order grounded
+ * in scripts/experiment-codegen.ts (LangWatch experiment
+ * "tokenmaxxer-codegen-chain", 8 page briefs × 4 models):
+ *
+ *   jimmy             p50=525ms   valid 7/8  quality 0.66
+ *   gemini-2.5-flash  p50=9294ms  valid 8/8  quality 0.92
+ *   gpt-4.1-mini      p50=20956ms valid 8/8  quality 0.92
+ *   inworld-gemma-4   p50=9142ms  valid 8/8  quality 0.92
+ *
+ * jimmy is 17-40x faster — the only one that makes a page appear as the
+ * sentence ends; its quality gap is the product thesis (instant draft,
+ * fleet deepens). gemini covers the misses at equal quality to models 2x
+ * slower; gemma-4-via-realtime matches gemini but adds WS complexity, so
+ * it stays out of the chain.
  */
 export function speedChain(): SpeedModel[] {
   const chain: SpeedModel[] = [
@@ -106,6 +118,23 @@ export interface CodegenResult {
 export async function generatePageCode(
   userPrompt: string,
   overallDeadlineMs = 45_000,
+): Promise<CodegenResult> {
+  return tracer.withActiveSpan("speedchain.codegen", async (span) => {
+    span.setType("llm");
+    span.setInput(userPrompt);
+    const result = await runChain(userPrompt, overallDeadlineMs);
+    span.setResponseModel(result.model);
+    span.setOutput(result.code);
+    span.setMetrics({});
+    span.setAttribute("tokenmaxxer.elapsed_ms", result.elapsedMs);
+    span.setAttribute("tokenmaxxer.attempts", result.attempts);
+    return result;
+  });
+}
+
+async function runChain(
+  userPrompt: string,
+  overallDeadlineMs: number,
 ): Promise<CodegenResult> {
   const t0 = Date.now();
   let attempts = 0;

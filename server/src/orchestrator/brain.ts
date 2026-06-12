@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { config } from "../config.js";
 import type { FleetAgentView } from "../events.js";
+import { tracer } from "../observability.js";
 
 const anthropic = new Anthropic({ apiKey: config.anthropicApiKey });
 
@@ -51,6 +52,21 @@ const ROUTE_TOOL: Anthropic.Tool = {
 };
 
 export async function decideDispatch(
+  mission: string,
+  topic: string,
+  fleet: FleetAgentView[],
+): Promise<DispatchDecision> {
+  return tracer.withActiveSpan("brain.route_mission", async (span) => {
+    span.setType("llm");
+    span.setRequestModel(config.brainModel);
+    span.setInput({ mission, topic, fleet });
+    const decision = await routeMission(mission, topic, fleet);
+    span.setOutput(decision);
+    return decision;
+  });
+}
+
+async function routeMission(
   mission: string,
   topic: string,
   fleet: FleetAgentView[],

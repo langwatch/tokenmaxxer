@@ -38,15 +38,41 @@ is unlimited — hesitation is the only cost.
 
 ```bash
 pnpm install
-cp .env.example .env   # fill in the keys
-pnpm dev               # gateway + console + playground
+cp .env.example .env   # fill in the keys (INWORLD_API_KEY, ANTHROPIC_API_KEY,
+                       # OPENAI_API_KEY, GEMINI_API_KEY, LANGWATCH_API_KEY)
+pnpm dev               # gateway :4870 + console :5170 + playground :5171
+                       # the gateway auto-starts the jimmy proxy if it's down
 ```
 
-Open the console, click **start listening**, and talk.
+Open the console at http://localhost:5170, click **start listening**, and talk.
+Demo script and failure playbook: [DEMO.md](DEMO.md).
+
+Worker agents are spawned through the [kanban CLI](https://github.com/langwatch)
+in tmux; `TOKENMAXXER_AGENT_MODEL` picks their model (`sonnet` for testing).
 
 ## Test it
 
 ```bash
-pnpm test          # integration + scenario voice tests (real audio, no mocks)
+cd server
+pnpm test          # 19 tests, all real, no mocks: scenario voice tests with
+                   # real audio + judge, fleet e2e spawning a real claude
+                   # agent in tmux, gateway integration, jimmy codegen
 pnpm typecheck
 ```
+
+Voice runs leave listenable recordings in `server/outputs/recordings/`.
+
+## Why jimmy (the speed data)
+
+LangWatch experiment `tokenmaxxer-codegen-chain`, 8 page briefs × 4 models
+(`server/scripts/experiment-codegen.ts`):
+
+| model | p50 latency | valid | judge quality |
+|---|---|---|---|
+| chatjimmy (Llama 3.1 8B @ ~17k tok/s) | **525ms** | 7/8 | 0.66 |
+| gemini-2.5-flash | 9294ms | 8/8 | 0.92 |
+| gpt-4.1-mini | 20956ms | 8/8 | 0.92 |
+| inworld gemma-4 (text-mode realtime) | 9142ms | 8/8 | 0.92 |
+
+jimmy is the only model that puts the page on screen as the sentence ends;
+the fallbacks cover its misses, and the claude fleet deepens whatever lands.
