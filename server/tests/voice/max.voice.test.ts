@@ -204,4 +204,54 @@ describe.sequential("Max — meeting room voice agent", () => {
     expect(code).toContain("export default function Page()");
     saveRecording(result.audio, "page-on-screen");
   }, 240_000);
+
+  it("changes a page mid-conversation when the team changes its mind", async () => {
+    const scenarioStart = Date.now();
+    const result = await scenario.run({
+      name: "spoken edit lands on the same page",
+      description:
+        "A founder asks for a simple waitlist page, then changes their mind " +
+        "about the copy. Max should create the page, then edit the SAME " +
+        "page rather than making a new one, confirming briefly each time.",
+      agents: [
+        maxUnderTest(),
+        scenario.userSimulatorAgent({
+          voice: "openai/nova",
+          persona:
+            "You are SPEAKING in a meeting room, decisive and brief. First " +
+            "ask for a waitlist signup page for your startup 'RoboBarista' " +
+            "on the screen. After it is up, say the headline should mention " +
+            "coffee robots — one short sentence.",
+        }),
+        scenario.judgeAgent({
+          criteria: [
+            "Max created a page with write_page for RoboBarista",
+            "When the user changed their mind, Max used edit_page (not another write_page) on the same page",
+            "Max confirmed each step out loud in one short sentence",
+          ],
+        }),
+      ],
+      script: [
+        scenario.user(),
+        scenario.agent(), // write_page tool turn
+        scenario.agent(), // spoken confirmation
+        scenario.user(),
+        scenario.agent(), // edit_page tool turn
+        scenario.agent(), // spoken confirmation
+        scenario.judge(),
+      ],
+      maxTurns: 12,
+    });
+    expect(result.success, result.reasoning).toBe(true);
+
+    const touched = fs
+      .readdirSync(PLAYGROUND_PAGES)
+      .filter((f) => f !== "home.tsx")
+      .filter(
+        (f) =>
+          fs.statSync(path.join(PLAYGROUND_PAGES, f)).mtimeMs >= scenarioStart,
+      );
+    expect(touched.length, "no page file was written").toBeGreaterThan(0);
+    saveRecording(result.audio, "edit-mid-conversation");
+  }, 300_000);
 });

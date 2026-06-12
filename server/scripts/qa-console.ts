@@ -42,12 +42,20 @@ async function buildMicTrack(): Promise<string> {
   const b = await ttsPcm24k(
     "Max, put a pricing page for PurrBnB on the screen. Three tiers, make it pop.",
   );
+  const c = await ttsPcm24k(
+    "Also, someone should research the cat sitter market size. Get an agent on it.",
+  );
+  const d = await ttsPcm24k("Max, how's it going so far?");
   const pcm = Buffer.concat([
     silence(4), // Max greets the room first
     a,
-    silence(7), // Max answers
+    silence(8), // Max answers
     b,
-    silence(25), // tool runs, page lands, Max confirms
+    silence(22), // page lands (VAD may split this into 2 turns), Max confirms
+    c,
+    silence(25), // dispatch ack + agent spins up in tmux
+    d,
+    silence(25), // progress report
   ]);
   const file = path.join(OUT, "qa-mic.wav");
   fs.writeFileSync(file, wavFromPcm16(pcm));
@@ -117,11 +125,34 @@ await shot(page, "03-tool-feed.png");
 await page.waitForFunction(
   // string form: browser context, not node — keeps DOM types out of tsc
   `(() => { const el = document.querySelector("iframe"); return el && new URL(el.src).pathname !== "/"; })()`,
+  undefined,
   { timeout: 60_000 },
 );
 // Give the freshly-written page a beat to hot-compile inside the iframe.
 await page.waitForTimeout(4000);
 await shot(page, "04-page-on-screen.png");
+
+// The fleet arc: dispatch_work spawns a real agent; the panel fills.
+await page.waitForSelector("text=dispatch_work", { timeout: 60_000 });
+console.log("dispatch_work fired");
+await page.waitForSelector("text=tmx-", { timeout: 60_000 });
+await shot(page, "07-fleet-spawning.png");
+
+// Progress question answered — ideally a SECOND check_progress (the first
+// fired on the opening "you there?" turn), but Max answering a one-agent
+// fleet from memory is acceptable; the voice scenario suite enforces the
+// strict tool behavior deterministically.
+try {
+  await page.waitForFunction(
+    `document.body.innerText.split("check_progress").length - 1 >= 2`,
+    undefined,
+    { timeout: 60_000 },
+  );
+} catch {
+  console.log("⚠️ no second check_progress — verify the spoken answer in the shot");
+}
+await page.waitForTimeout(3000);
+await shot(page, "08-progress-answer.png");
 
 // Unhappy path: the playground's not-found page (a page nobody asked for).
 await page.goto("http://localhost:5171/this-page-does-not-exist");

@@ -84,15 +84,18 @@ export class FleetManager extends EventEmitter {
   private findByTopic(topic: string): FleetAgent | undefined {
     const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
     return [...this.agents.values()].find(
-      (a) => norm(a.topic) === norm(topic),
+      (a) => a.status !== "gone" && norm(a.topic) === norm(topic),
     );
   }
 
   private async route(mission: string, topic: string): Promise<void> {
+    // Provisional entries and dead agents are not reuse candidates.
     const decision = await decideDispatch(
       mission,
       topic,
-      this.list().filter((a) => a.lastActivity !== "routing mission"),
+      this.list().filter(
+        (a) => a.lastActivity !== "routing mission" && a.status !== "gone",
+      ),
     );
     log("fleet", `brain: ${decision.action} ${decision.slug} in ${decision.workspace}`);
 
@@ -106,8 +109,10 @@ export class FleetManager extends EventEmitter {
       this.agents.delete(provisionalSlug);
     }
 
-    const existing =
+    const reuseTarget =
       decision.action === "reuse" ? this.agents.get(decision.slug) : undefined;
+    const existing =
+      reuseTarget && reuseTarget.status !== "gone" ? reuseTarget : undefined;
     if (existing) {
       existing.mission = mission;
       existing.status = "working";

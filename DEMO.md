@@ -8,6 +8,10 @@ pnpm dev          # gateway :4870 + console :5170 + playground :5171
                   # the gateway auto-starts the jimmy proxy if it's down
 ```
 
+Start these FRESH right before the demo — vite dev servers that have been
+running for hours can wedge their tailwind CSS pipeline (pages render
+unstyled until restarted).
+
 Open **http://localhost:5170** on the room screen / projector. Click
 **start listening** once (grants the mic). Max greets the room. You're live.
 

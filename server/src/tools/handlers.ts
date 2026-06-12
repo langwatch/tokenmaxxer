@@ -67,7 +67,9 @@ const handlers: Record<string, Handler> = {
       output: {
         status: "live",
         page: `/${slug}`,
-        note: `Page is on the room screen (generated in ${(result.elapsedMs / 1000).toFixed(1)}s).`,
+        note:
+          `Page is on the room screen (generated in ${(result.elapsedMs / 1000).toFixed(1)}s). ` +
+          "Confirm briefly; do not call page tools again unless the team asks for more.",
       },
       navigate: `/${slug}`,
     };

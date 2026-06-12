@@ -9,9 +9,12 @@ import { TOOL_SCHEMAS } from "../tools/schemas.js";
  * `turn_detection: null`.
  */
 
+// Eagerness low: meeting speech comes in complete sentences; medium splits
+// one request into 2-3 turns, each re-triggering tools and polluting the
+// context (observed in browser QA — three write_page calls for one ask).
 const DEFAULT_TURN_DETECTION = {
   type: "semantic_vad",
-  eagerness: "medium",
+  eagerness: "low",
   create_response: true,
   interrupt_response: true,
 };

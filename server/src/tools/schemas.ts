@@ -12,7 +12,9 @@ export const TOOL_SCHEMAS = [
       "agent (new or the one already on that topic) starts immediately in the " +
       "background. Use for research, building features or backends, drafts, " +
       "analysis — anything beyond a single visual page. Call it the moment " +
-      "work is mentioned; never ask permission first.",
+      "work is mentioned; never ask permission first. Phrases like 'get an " +
+      "agent on it', 'someone should look into X', 'let's research X', " +
+      "'we need a report on X' ALWAYS mean: call dispatch_work now.",
     parameters: {
       type: "object",
       properties: {
