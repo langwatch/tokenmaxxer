@@ -22,7 +22,9 @@ export const config = {
   inworldVoice: process.env.INWORLD_VOICE ?? "Jason",
 
   anthropicApiKey: required("ANTHROPIC_API_KEY"),
-  brainModel: process.env.TOKENMAXXER_BRAIN_MODEL ?? "claude-sonnet-4-6",
+  /** Routing is simple structured output — haiku is fast and sufficient
+   * (verified by the orchestrator brain tests). */
+  brainModel: process.env.TOKENMAXXER_BRAIN_MODEL ?? "claude-haiku-4-5",
 
   /** Model alias passed to `kanban launch --model` for worker agents. */
   agentModel: process.env.TOKENMAXXER_AGENT_MODEL ?? "sonnet",

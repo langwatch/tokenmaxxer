@@ -18,6 +18,7 @@ import path from "node:path";
 import scenario, { AgentRole, voice } from "@langwatch/scenario";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { startTestServer, type TestServer } from "../helpers/gateway.js";
+import { saveRecording } from "./helpers/save-recording.js";
 
 const PLAYGROUND_PAGES = path.resolve(
   import.meta.dirname,
@@ -113,6 +114,13 @@ describe.sequential("Max — meeting room voice agent", () => {
       maxTurns: 8,
     });
     expect(result.success, result.reasoning).toBe(true);
+
+    // Listenable proof: both sides actually spoke.
+    const dir = saveRecording(result.audio, "dispatch-on-idea");
+    expect(dir, "no audio recording captured").not.toBeNull();
+    const speakers = new Set(result.audio!.segments.map((s) => s.speaker));
+    expect(speakers.has("user"), "no user audio in recording").toBe(true);
+    expect(speakers.has("agent"), "no agent audio in recording").toBe(true);
   }, 240_000);
 
   it("answers progress questions from fleet state", async () => {
@@ -145,6 +153,7 @@ describe.sequential("Max — meeting room voice agent", () => {
       maxTurns: 8,
     });
     expect(result.success, result.reasoning).toBe(true);
+    saveRecording(result.audio, "progress-check");
   }, 240_000);
 
   it("paints a page on the room screen when asked for something visual", async () => {
@@ -193,5 +202,6 @@ describe.sequential("Max — meeting room voice agent", () => {
     expect(touched.length, "no page file was written").toBeGreaterThan(0);
     const code = fs.readFileSync(path.join(PLAYGROUND_PAGES, touched[0]), "utf8");
     expect(code).toContain("export default function Page()");
+    saveRecording(result.audio, "page-on-screen");
   }, 240_000);
 });

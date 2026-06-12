@@ -50,11 +50,32 @@ export class FleetManager extends EventEmitter {
 
   /** Returns immediately; the routing decision and launch run in background. */
   dispatch(mission: string, topic: string): string {
+    const related = this.findByTopic(topic);
+    if (!related) {
+      // The room screen shows the agent the instant the words are spoken;
+      // the brain confirms or renames it a few seconds later.
+      const provisionalSlug = `${config.fleetPrefix}${topic
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "")}`.slice(0, 40);
+      if (!this.agents.has(provisionalSlug)) {
+        this.agents.set(provisionalSlug, {
+          slug: provisionalSlug,
+          tmuxName: provisionalSlug,
+          topic,
+          mission,
+          workspace: "",
+          status: "launching",
+          lastActivity: "routing mission",
+          launchedAt: Date.now(),
+        });
+        this.emitFleet();
+      }
+    }
     void this.route(mission, topic).catch((err) => {
       log("fleet", `dispatch failed: ${(err as Error).message}`);
       this.emitFleet();
     });
-    const related = this.findByTopic(topic);
     return related
       ? `Dispatched as follow-up to agent "${related.slug}" already on "${related.topic}".`
       : `Dispatched. A new agent is spinning up for "${topic}".`;
@@ -68,8 +89,22 @@ export class FleetManager extends EventEmitter {
   }
 
   private async route(mission: string, topic: string): Promise<void> {
-    const decision = await decideDispatch(mission, topic, this.list());
+    const decision = await decideDispatch(
+      mission,
+      topic,
+      this.list().filter((a) => a.lastActivity !== "routing mission"),
+    );
     log("fleet", `brain: ${decision.action} ${decision.slug} in ${decision.workspace}`);
+
+    // The provisional entry served its purpose; the decision replaces it.
+    const provisionalSlug = `${config.fleetPrefix}${topic
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")}`.slice(0, 40);
+    const provisional = this.agents.get(provisionalSlug);
+    if (provisional && provisional.lastActivity === "routing mission") {
+      this.agents.delete(provisionalSlug);
+    }
 
     const existing =
       decision.action === "reuse" ? this.agents.get(decision.slug) : undefined;
