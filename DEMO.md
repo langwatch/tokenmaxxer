@@ -15,11 +15,14 @@ unstyled until restarted).
 Open **http://localhost:5170** on the room screen / projector. Click
 **start listening** once (grants the mic). Max greets the room. You're live.
 
-Pre-flight checks:
+Pre-flight checks (one command, every moving part):
 
-- Green **LIVE** dot in the console header.
-- Say "Max, quick check — you there?" → Max answers within ~2s.
-- `curl -s localhost:4100/v1/models` → jimmy proxy answers.
+```bash
+cd server && npx tsx scripts/preflight.ts   # 🚀 ALL SYSTEMS GO or it tells you what's broken
+```
+
+Then the human check: green **LIVE** dot, say "Max, quick check — you
+there?" → Max answers within ~2s.
 
 If gemma-4 reports capacity problems the gateway retries and then switches
 to the fallback model automatically — the demo keeps going (a banner shows
