@@ -16,9 +16,11 @@ Feature: Meeting agent persona (Max)
 
   Scenario: Instant visual work goes to the playground tools
     When a participant asks for a page, website, UI or visual prototype
-    Then Max calls "write_page" or "edit_page" with a vivid one-paragraph description
-    And calls "open_page" so the room screen shows the result
-    And the page is visible in the room within seconds
+    Then Max calls "write_page" (new) or "edit_page" (existing) with a vivid
+      one-paragraph description
+    And the page appears on the room screen within seconds without further calls
+    And Max states the success as fact, briefly, never as a question
+    And Max never repeats the same tool call for the same request
 
   Scenario: Deep work goes to the agent fleet
     When a participant asks for research, a backend, an integration or anything

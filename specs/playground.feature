@@ -34,10 +34,22 @@ Feature: Playground (instant visual prototyping)
     And invalid output triggers one retry with the error appended
     And a second failure falls back to the next model in the chain
 
-  Scenario: open_page drives the room screen
+  Scenario: write_page and edit_page drive the room screen themselves
+    When write_page or edit_page succeeds for path "pricing"
+    Then connected consoles receive a "tokenmaxxer.navigate" event for "/pricing"
+
+  Scenario: open_page returns to an existing page
+    Given a page "pricing" exists
     When the open_page tool is called with path "pricing"
     Then connected consoles receive a "tokenmaxxer.navigate" event
     And the playground preview shows "/pricing"
+
+  Scenario: Tools teach the model instead of failing silently
+    When open_page is called for a page that does not exist
+    Then the tool result says the page is missing, lists existing pages
+      and points to write_page
+    When write_page targets the protected "home" index
+    Then the tool result refuses and asks for a descriptive new slug
 
   Scenario: Model choice is grounded in measurements
     Given an evaluation dataset of representative page requests
