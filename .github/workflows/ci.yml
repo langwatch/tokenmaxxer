@@ -1,0 +1,23 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm -r typecheck
+      # Only the network-free tests run in CI; the voice/fleet/codegen
+      # suites need live APIs, tmux and the kanban CLI (see README).
+      - run: npx vitest run tests/validate.unit.test.ts
+        working-directory: server
