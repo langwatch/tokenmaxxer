@@ -7,7 +7,9 @@ export default withScenario(
     test: {
       // Real integrations everywhere (Inworld, jimmy, kanban, claude) —
       // generous timeouts and no cross-file parallelism so sessions and
-      // tmux agents never trample each other.
+      // tmux agents never trample each other. One retry absorbs the
+      // residual nondeterminism of live voice models and judges.
+      retry: 1,
       testTimeout: 240_000,
       hookTimeout: 120_000,
       fileParallelism: false,
