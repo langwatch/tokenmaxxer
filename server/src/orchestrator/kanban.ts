@@ -28,6 +28,10 @@ export async function kanbanLaunch(
     cwd,
     "--model",
     model,
+    // Always launch a FRESH session. The slug seeds a deterministic sessionId,
+    // so a recycled name would otherwise resume an unrelated old session — wrong
+    // mission, or a "No conversation found" dead shell with no card to send to.
+    "--no-resume",
     "--json",
   ]);
   return JSON.parse(stdout) as LaunchResult;
