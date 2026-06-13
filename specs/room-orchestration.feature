@@ -65,6 +65,14 @@ Feature: Spinning up rooms of self-organizing agents
     Then Max calls spawn_room for the langwatch project referencing the issue
     And a new channel and its agents are created for the fix
 
+  Scenario: Tearing down a room by voice
+    Given a room is already running for the "dark mode" topic
+    When the team says "kill the dark mode room"
+    Then Max calls close_room for that topic
+    And the room's agent tmux sessions are killed
+    And the room's channel is deleted
+    And Max confirms the room is shut down in one short sentence
+
   Scenario: Progress comes from the channel, not invented
     Given a room has been chatting in its channel
     When the team asks "how's it going in there?"

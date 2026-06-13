@@ -40,6 +40,54 @@ If gemma-4 reports capacity problems the gateway retries and then switches
 to the fallback model automatically — the demo keeps going (a banner shows
 the switch).
 
+## The 2-minute skit (the exact wording we say)
+
+Two devs in a standup — **R** (Rogerio) and **A** (Aryan) — talking to each
+other. **M** is Max, the always-listening room AI. Nobody touches a keyboard.
+Screen starts empty: KanbanCode board idle top-left, HUD pulsing bottom-centre.
+
+> **A:** "Did the new site go live this morning?"
+> **R:** "Think so — Max, pull it up?"
+> **M:** *(site flies onto the screen, top-right)* "There it is."
+> **A:** "Ohh, that's clean."
+> **R:** "Clean, but it's blinding. We're devs — we live in dark mode."
+> **A:** "Honestly it'd look way cooler dark. Max, get a few agents on a dark-mode pass."
+> **M:** "Say less, boss — three agents on full dark mode, they're in the room now." *(3 terminals fly open; KanbanCode board snaps to #dark-mode top-left)*
+> **A:** *(reading the board)* "Wait — one of them just said 'I'll take the CSS foundations, someone grab the pages.'"
+> **R:** "We didn't assign that."
+> **M:** "They sort it out themselves. That's the whole point."
+>
+> *(let it land — you assigned no roles)*
+>
+> **A:** "Oh — someone opened issue 1234 on the repo overnight. Max, throw it on the screen?"
+> **M:** *(GitHub issue, top-right)* "Up."
+> **R:** "Don't wait on us — get a couple agents fixing it too."
+> **M:** "Second room, going." *(more terminals; two rooms running in parallel now)*
+> **R:** *(to the room)* "We haven't typed one character. We just talked."
+> **M:** "Five agents shipping. Six now — the dark-mode room pulled in another."
+
+**Tag line:** *"When compute isn't the limit, you don't write code — you run a meeting."*
+
+**Why it works as a story**
+- One line of small talk, max — 2 minutes is brutal; open inside the action.
+- The hero beat is the **self-organization** ("I'll take the CSS, you grab the
+  pages" — unprompted). Read it aloud off the board and pause. That's the line
+  that makes judges sit up: *you assigned no roles.*
+- Give Max a voice — dry, fast, a little cocky ("Say less", "Six now"). One
+  memorable line per beat.
+- Choreograph the screen so it FILLS UP: site → terminals + board → issue →
+  second room. The accumulation is "unlimited compute" made visible; never
+  clear anything.
+- The second room (the issue) proves it **scales** — one meeting, two parallel
+  workstreams. End on the reframe and stop talking.
+
+**Reliability (so the magic lands live)** — these exact cues route 100% in the
+delegation eval: "pull it up" / "pull up the website" -> open_url; "get a few
+agents on dark mode" / "get a couple agents fixing it" -> spawn_room; "throw
+issue 1234 on the screen" -> open_url. Keep an action verb in the human's line
+(or let Max carry it). A pure vibe line with no verb ("it'd look cooler dark")
+may not trigger Max on its own.
+
 ## The arc (the swarm is the story)
 
 1. **The hook.** "This room has unlimited compute. One agent is one context

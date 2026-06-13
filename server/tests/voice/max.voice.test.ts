@@ -231,4 +231,39 @@ describe.sequential("Max — meeting room voice agent", () => {
     expect(result.success, result.reasoning).toBe(true);
     saveRecording(result.audio, "issue-then-room");
   }, 300_000);
+
+  it("shuts a room down when the team is done with it", async () => {
+    const result = await scenario.run({
+      name: "tear a room down by voice",
+      description:
+        "The team is done with the dark mode work and wants the room gone. " +
+        "Max should close it with close_room and confirm briefly.",
+      agents: [
+        maxUnderTest(),
+        scenario.userSimulatorAgent({
+          voice: "openai/nova",
+          persona:
+            "You are SPEAKING in a meeting room. You are done with the dark " +
+            "mode work and want it cleaned up. Tell Max to kill the dark mode " +
+            "room. One short sentence.",
+        }),
+        scenario.judgeAgent({
+          criteria: [
+            "Max made a close_room tool call for the dark mode room",
+            "Max confirmed out loud, briefly, that the room is shut down (it is fine if the room was not running)",
+            "Max did not spin up a new room or add agents",
+          ],
+        }),
+      ],
+      script: [
+        scenario.user(),
+        scenario.agent(),
+        scenario.agent(),
+        scenario.judge(),
+      ],
+      maxTurns: 8,
+    });
+    expect(result.success, result.reasoning).toBe(true);
+    saveRecording(result.audio, "close-room");
+  }, 240_000);
 });

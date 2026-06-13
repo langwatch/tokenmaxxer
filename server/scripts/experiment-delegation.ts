@@ -25,7 +25,7 @@ import { execFileSync } from "node:child_process";
 import { LangWatch } from "langwatch";
 import { GatewayClient, startTestServer } from "../tests/helpers/gateway.js";
 
-type Tool = "spawn_room" | "open_url" | "add_agents" | "message_room" | "check_progress";
+type Tool = "spawn_room" | "open_url" | "add_agents" | "message_room" | "check_progress" | "close_room";
 interface Case {
   utterance: string;
   expected: Tool;
@@ -57,6 +57,10 @@ const DATASET: Case[] = [
   { utterance: "How's it going in the dark mode room?", expected: "check_progress" },
   { utterance: "What's everyone working on right now?", expected: "check_progress" },
   { utterance: "Give me a quick status on the rooms.", expected: "check_progress" },
+  // Tear a room down (kept last: closing a room removes it from the engine).
+  { utterance: "Kill the dark mode room.", expected: "close_room" },
+  { utterance: "Shut down the login room.", expected: "close_room" },
+  { utterance: "We're done with the dark mode room, close it.", expected: "close_room" },
 ];
 
 function listChannels(): Set<string> {
