@@ -132,15 +132,20 @@ export class RoomClient {
   }
 
   private sendAudio(samples: Float32Array) {
-    if (this.state.muted || this.ws?.readyState !== WebSocket.OPEN) return;
+    if (this.ws?.readyState !== WebSocket.OPEN) return;
+    // When muted, keep streaming but send SILENCE (zeroed samples) instead of
+    // the mic. The VAD has to HEAR the silence to detect end-of-turn and commit
+    // what was already said — sending no frames at all just leaves it waiting,
+    // so the buffered speech only flushes on unmute. Silence also means a noisy
+    // room can't re-trigger a turn while muted.
     const pcm = new Int16Array(samples.length);
-    for (let i = 0; i < samples.length; i++) {
-      const s = Math.max(-1, Math.min(1, samples[i]));
-      pcm[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
+    if (!this.state.muted) {
+      for (let i = 0; i < samples.length; i++) {
+        const s = Math.max(-1, Math.min(1, samples[i]));
+        pcm[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
+      }
     }
-    const b64 = btoa(
-      String.fromCharCode(...new Uint8Array(pcm.buffer)),
-    );
+    const b64 = btoa(String.fromCharCode(...new Uint8Array(pcm.buffer)));
     this.ws.send(
       JSON.stringify({ type: "input_audio_buffer.append", audio: b64 }),
     );
@@ -217,12 +222,13 @@ export class RoomClient {
   }
 
   /**
-   * Mute/unmute the mic. Muted = no audio reaches the gateway, so a noisy room
-   * can't keep the VAD triggering on background sound; the mic track is disabled
-   * too, so the OS shows the mic as off.
+   * Mute/unmute the mic. Muted swaps the mic for silence on the wire (see
+   * sendAudio): the VAD gets a clean end-of-turn and commits what was said, and
+   * a noisy room can't re-trigger. The track stays live on purpose so the
+   * capture worklet keeps firing — a disabled track can stop it, which would
+   * stop the silence frames and leave the turn hanging.
    */
   setMuted(muted: boolean) {
-    this.mediaStream?.getAudioTracks().forEach((t) => (t.enabled = !muted));
     this.update({ muted });
   }
 }
