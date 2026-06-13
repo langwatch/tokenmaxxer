@@ -20,6 +20,8 @@ const WARP_LAUNCH_DIR = path.join(os.homedir(), ".warp", "launch_configurations"
 const CHROME_BIN =
   "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 const CHROME_DATA_ROOT = path.join(os.tmpdir(), "tokenmaxxer-chrome");
+/** System Events process name for the KanbanCode native app (the board). */
+const KANBAN_APP_PROCESS = "KanbanCode";
 
 function escapeForApplescript(value: string): string {
   return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
@@ -239,6 +241,29 @@ windows:
       );
     } catch (err) {
       log("desktop", `notify failed: ${(err as Error).message}`);
+    }
+  }
+
+  async focusChannel(channel: string): Promise<void> {
+    try {
+      // Deep-link the board to this channel: brings KanbanCode forward and
+      // selects the channel (handled by the app's kanbancode:// URL handler).
+      await new Promise<void>((resolve) => {
+        const child = spawn("kanban", ["channel", "open", channel], {
+          stdio: "ignore",
+        });
+        child.on("exit", () => resolve());
+        child.on("error", () => resolve());
+      });
+      // Pin the board to the top-left quarter so it's the room's focal point
+      // while terminals fan out below and the screen sits top-right.
+      await delay(400);
+      await this.positionFrontWindow(
+        KANBAN_APP_PROCESS,
+        regionForSlot("top-left", await this.screen()),
+      );
+    } catch (err) {
+      log("desktop", `focusChannel failed: ${(err as Error).message}`);
     }
   }
 

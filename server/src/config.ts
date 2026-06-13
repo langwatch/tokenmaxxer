@@ -1,6 +1,5 @@
 import "dotenv/config";
 import os from "node:os";
-import path from "node:path";
 
 function required(name: string): string {
   const v = process.env[name];
@@ -21,32 +20,21 @@ export const config = {
     process.env.INWORLD_FALLBACK_MODEL ?? "google-ai-studio/gemini-2.5-flash",
   inworldVoice: process.env.INWORLD_VOICE ?? "Jason",
 
-  anthropicApiKey: required("ANTHROPIC_API_KEY"),
-  /** Routing is simple structured output — haiku is fast and sufficient
-   * (verified by the orchestrator brain tests). */
-  brainModel: process.env.TOKENMAXXER_BRAIN_MODEL ?? "claude-haiku-4-5",
-
-  /** Model alias passed to `kanban launch --model` for worker agents. */
-  agentModel: process.env.TOKENMAXXER_AGENT_MODEL ?? "sonnet",
-
-  jimmyProxyUrl: process.env.JIMMY_PROXY_URL ?? "http://localhost:4100/v1",
-  defaultPageModel: process.env.TOKENMAXXER_PAGE_MODEL ?? "jimmy",
-  geminiApiKey: process.env.GEMINI_API_KEY ?? "",
+  /** Whisper transcription for manual-turn (scenario) clients — see stt-shim. */
   openaiApiKey: process.env.OPENAI_API_KEY ?? "",
 
-  playgroundDir:
-    process.env.TOKENMAXXER_PLAYGROUND_DIR ??
-    path.resolve(import.meta.dirname, "../../playground"),
-  playgroundUrl: process.env.TOKENMAXXER_PLAYGROUND_URL ?? "http://localhost:5171",
+  /** Model alias passed to `kanban launch --model` for the room's agents. */
+  agentModel: process.env.TOKENMAXXER_AGENT_MODEL ?? "sonnet",
 
+  /** Parent dir for any scratch workspace a room needs (when not a real repo). */
   workspacesDir:
     process.env.TOKENMAXXER_WORKSPACES_DIR ??
-    path.join(os.homedir(), "Projects", "tokenmaxxer-workspaces"),
+    os.homedir() + "/Projects/tokenmaxxer-workspaces",
 
-  /** Prefix for kanban slugs so fleet agents are recognizable and filterable. */
+  /** Prefix for kanban slugs so room agents are recognizable and filterable. */
   fleetPrefix: "tmx-",
 
-  /** When set, the fleet routes and tracks but never launches real agents —
-   * used by routing tests to assert tool choice without spawning tmux. */
+  /** When set, rooms create channels and track agents but never launch real
+   * tmux sessions — used by routing/unit tests to assert behavior headlessly. */
   fleetDryRun: process.env.TOKENMAXXER_FLEET_DRYRUN === "1",
 };

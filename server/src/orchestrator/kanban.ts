@@ -54,6 +54,56 @@ export async function kanbanKill(tmuxName: string): Promise<void> {
   }
 }
 
+/** The handle Max posts under when speaking into a room channel. */
+export const MAX_HANDLE = "max";
+
+/** Create a channel (idempotent — already-exists is fine). */
+export async function kanbanChannelCreate(channel: string): Promise<void> {
+  try {
+    await exec("kanban", ["channel", "create", channel, "--as", MAX_HANDLE, "--json"]);
+  } catch (err) {
+    // Re-creating an existing channel is not an error for us.
+    log("kanban", `channel create ${channel}: ${(err as Error).message}`);
+  }
+}
+
+/** Broadcast a message into a channel as a given handle (Max by default). */
+export async function kanbanChannelSend(
+  channel: string,
+  message: string,
+  as: string = MAX_HANDLE,
+): Promise<void> {
+  await exec("kanban", ["channel", "send", channel, message, "--as", as, "--json"], {
+    maxBuffer: 10 * 1024 * 1024,
+  });
+}
+
+/** Recent channel history as raw text, for composing a progress report. */
+export async function kanbanChannelHistory(
+  channel: string,
+  n = 20,
+): Promise<string> {
+  try {
+    const { stdout } = await exec(
+      "kanban",
+      ["channel", "history", channel, "-n", String(n)],
+      { maxBuffer: 10 * 1024 * 1024 },
+    );
+    return stdout;
+  } catch {
+    return "";
+  }
+}
+
+/** Bring the KanbanCode app forward, focused on a channel (deep link). */
+export async function kanbanChannelOpen(channel: string): Promise<void> {
+  try {
+    await exec("kanban", ["channel", "open", channel]);
+  } catch (err) {
+    log("kanban", `channel open ${channel} failed: ${(err as Error).message}`);
+  }
+}
+
 /** True when the pane shows claude actively generating. */
 export function looksBusy(capture: string): boolean {
   return /esc to interrupt/i.test(capture);

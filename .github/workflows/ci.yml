@@ -17,8 +17,9 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm -r typecheck
-      # Only the network-free tests run in CI; the voice/fleet/codegen/
-      # desktop-window suites need live APIs, tmux, the kanban CLI or a Mac
-      # (see README). The desktop unit tests (tiler + noop) are pure.
-      - run: npx vitest run tests/validate.unit.test.ts tests/desktop.test.ts
+      # Only the network-free tests run in CI; the voice/room/desktop-window
+      # suites need live APIs, tmux, the kanban CLI or a Mac (see README). The
+      # room unit tests (project resolution, channel naming, the agent brief)
+      # and the desktop tiler/noop tests are pure.
+      - run: npx vitest run tests/room.unit.test.ts tests/desktop.test.ts
         working-directory: server

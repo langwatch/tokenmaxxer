@@ -31,5 +31,8 @@ export class NoopDesktopController implements DesktopController {
   async notify(opts: NotifyOptions): Promise<void> {
     log("desktop", `noop notify: ${opts.title} — ${opts.message}`);
   }
+  async focusChannel(channel: string): Promise<void> {
+    log("desktop", `noop focusChannel ${channel}`);
+  }
   async closeManaged(): Promise<void> {}
 }

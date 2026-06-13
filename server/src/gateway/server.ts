@@ -5,10 +5,9 @@ import { config } from "../config.js";
 import type { TokenmaxxerEvent } from "../events.js";
 import { InworldUpstream, type RealtimeEvent } from "../inworld/upstream.js";
 import { log } from "../log.js";
-import { fleet } from "../orchestrator/fleet.js";
+import { rooms } from "../orchestrator/room.js";
 import { tracer } from "../observability.js";
 import { MAX_GREETING } from "../persona.js";
-import { settings } from "../settings.js";
 import { transcribePcm } from "./stt-shim.js";
 import { executeTool } from "../tools/handlers.js";
 import { buildSessionConfig, type ClientSessionRequest } from "./session-config.js";
@@ -408,7 +407,9 @@ export function startGateway(): http.Server {
   const server = http.createServer((req, res) => {
     if (req.url === "/health") {
       res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ ok: true, fleet: fleet.list().length }));
+      res.end(
+        JSON.stringify({ ok: true, fleet: rooms.list().length, rooms: rooms.roomCount() }),
+      );
       return;
     }
     res.writeHead(404);
@@ -420,17 +421,11 @@ export function startGateway(): http.Server {
     clients.add(ws);
     log("gateway", `client connected (${clients.size} total)`);
     new GatewaySession(ws);
-    // Late joiners see the current fleet and settings immediately.
-    ws.send(JSON.stringify({ type: "tokenmaxxer.fleet", agents: fleet.list() }));
-    ws.send(
-      JSON.stringify({ type: "tokenmaxxer.settings", pageModel: settings.pageModel }),
-    );
+    // Late joiners see the current room agents immediately.
+    ws.send(JSON.stringify({ type: "tokenmaxxer.fleet", agents: rooms.list() }));
   });
 
-  fleet.on("fleet", (agents) => broadcast({ type: "tokenmaxxer.fleet", agents }));
-  settings.on("change", ({ pageModel }) =>
-    broadcast({ type: "tokenmaxxer.settings", pageModel }),
-  );
+  rooms.on("fleet", (agents) => broadcast({ type: "tokenmaxxer.fleet", agents }));
 
   server.listen(config.port, () => {
     log("gateway", `listening on http://localhost:${config.port} (ws: /realtime)`);

@@ -90,6 +90,13 @@ export interface DesktopController {
   /** Surface a proactive notification (and optionally a URL). */
   notify(opts: NotifyOptions): Promise<void>;
 
+  /**
+   * Bring the agent board (KanbanCode) forward focused on a channel and pin
+   * it to its corner of the screen, so the room watches the agents talk in
+   * real time. Best-effort — a missing app must not break a spawn.
+   */
+  focusChannel(channel: string): Promise<void>;
+
   /** Tear down windows this controller opened (reset between runs). */
   closeManaged(): Promise<void>;
 }

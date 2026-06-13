@@ -1,37 +1,58 @@
 /**
  * Tool definitions sent to the Inworld session. OpenAI Realtime "function"
- * format. Descriptions are written to steer gemma-4's trigger behavior.
+ * format. Descriptions are written to steer gemma-4's trigger behavior — they
+ * carry as much weight as the persona, so they are blunt and example-led.
+ *
+ * gemma-4 is a small model that grabs one tool as a catch-all when it is
+ * unsure, so every description both CLAIMS its own phrasings AND disclaims the
+ * others' — open_url in particular is hard-gated to "show an existing thing".
  */
 
 export const TOOL_SCHEMAS = [
   {
     type: "function",
-    name: "dispatch_work",
+    name: "spawn_room",
     description:
-      "Dispatch real engineering or research WORK to a Claude Code agent that " +
-      "opens in a terminal: implementing a feature, a backend, an API, " +
-      "auth/login, an integration, a data pipeline, research, analysis, or a " +
-      "document. Anything that needs real code, a repo, or investigation — " +
-      "even when phrased as 'build'. NOT for webpages or visual prototypes " +
-      "(use write_page for those). Fire-and-forget; call it the moment work " +
-      "is mentioned, never ask permission. 'Implement X', 'build an " +
-      "integration', 'research X', 'someone should look into X' → dispatch_work.",
+      "DO work: spin up a ROOM of Claude Code agents that land in one shared " +
+      "chat channel and self-organize. Use for anything that MAKES or CHANGES " +
+      "something — implement a feature, redesign a page, build dark mode, fix " +
+      "a bug, refactor, or research/investigate. Fire the MOMENT work is " +
+      "mentioned, even loosely: 'get five agents on dark mode', 'spin up a " +
+      "room to fix the login', 'throw a team at redesigning the pricing " +
+      "page', 'someone should look into why the dashboard is slow', 'have " +
+      "some agents research X' → spawn_room. Never ask permission, never wait " +
+      "for consensus. If a room for this topic already exists, this passes " +
+      "the new direction along instead of forking it. NOT open_url — if they " +
+      "want something built, changed, or fixed, it is a ROOM, not a browser " +
+      "tab.",
     parameters: {
       type: "object",
       properties: {
         mission: {
           type: "string",
           description:
-            "Self-contained mission brief for a worker agent that did not " +
-            "hear the meeting: goal, key context from the conversation, and " +
-            "what done looks like. 2-5 sentences.",
+            "Self-contained brief for agents who did NOT hear the meeting: " +
+            "the goal, key context, and what done looks like. 2-4 sentences.",
         },
         topic: {
           type: "string",
           description:
-            "Stable 2-4 word lowercase workstream label, e.g. 'cat sitter " +
-            "market research'. Reuse the SAME label when the team changes " +
-            "direction on existing work so it reaches the same agent.",
+            "Stable 2-4 word lowercase label for this workstream, e.g. " +
+            "'dark mode' or 'login fix'. Reuse the SAME label later to reach " +
+            "the same room.",
+        },
+        agents: {
+          type: "number",
+          description:
+            "How many agents to put in the room. Use the number asked for " +
+            "(e.g. 'five agents' = 5, 'a couple' = 2). Omit for a default " +
+            "small team.",
+        },
+        project: {
+          type: "string",
+          description:
+            "Which codebase to work in if named, e.g. 'the website' or " +
+            "'langwatch'. Omit if unstated.",
         },
       },
       required: ["mission", "topic"],
@@ -39,11 +60,98 @@ export const TOOL_SCHEMAS = [
   },
   {
     type: "function",
+    name: "message_room",
+    description:
+      "STEER a room that is ALREADY running: pass a note, correction, or " +
+      "extra instruction to its agents without launching anyone new. 'Tell " +
+      "the dark mode room to keep the logo readable', 'remind the login room " +
+      "to write tests', 'let them know to match the brand colors' → " +
+      "message_room. The agents see it in their channel and react. NOT " +
+      "open_url and NOT spawn_room — nobody new is launched and nothing " +
+      "opens on the screen.",
+    parameters: {
+      type: "object",
+      properties: {
+        topic: {
+          type: "string",
+          description: "The room's workstream label, e.g. 'dark mode'.",
+        },
+        message: {
+          type: "string",
+          description: "The note to broadcast into the room's channel.",
+        },
+      },
+      required: ["topic", "message"],
+    },
+  },
+  {
+    type: "function",
+    name: "add_agents",
+    description:
+      "Add MORE agents to a room already in flight when the team wants more " +
+      "horsepower on it. 'Throw two more agents at the dark mode room', " +
+      "'double the team on the login fix', 'add three more hands to it' → " +
+      "add_agents. NOT open_url — the new agents join the existing channel " +
+      "and nothing opens on the screen.",
+    parameters: {
+      type: "object",
+      properties: {
+        topic: {
+          type: "string",
+          description: "The room's workstream label, e.g. 'dark mode'.",
+        },
+        count: {
+          type: "number",
+          description: "How many agents to add. Omit for one.",
+        },
+      },
+      required: ["topic"],
+    },
+  },
+  {
+    type: "function",
+    name: "open_url",
+    description:
+      "SHOW an already-existing thing on the room screen: open a real " +
+      "browser window at a website, a page, a GitHub issue or PR, or a " +
+      "dashboard. This is a read-only 'put it on the screen' action. ONLY " +
+      "fire it when the team asks to SEE / SHOW / OPEN / PULL UP / BRING UP " +
+      "a specific thing: 'pull up the website', 'open issue 1234 on " +
+      "langwatch', 'show me the repo', 'put the live site on the screen'. " +
+      "DO NOT use open_url to build or change anything (that is spawn_room), " +
+      "to steer a running room (message_room / add_agents), or to report " +
+      "status (check_progress) — if you are unsure, it is almost never " +
+      "open_url. For the live website pass url 'the website' — do NOT guess " +
+      "a port; for a GitHub issue build https://github.com/langwatch/" +
+      "langwatch/issues/<n>.",
+    parameters: {
+      type: "object",
+      properties: {
+        url: {
+          type: "string",
+          description:
+            "The full URL to open, or 'the website' for the live local " +
+            "site (the room resolves it). For a GitHub issue build the " +
+            "github.com issues URL.",
+        },
+        label: {
+          type: "string",
+          description: "Optional short label for what is being opened.",
+        },
+      },
+      required: ["url"],
+    },
+  },
+  {
+    type: "function",
     name: "check_progress",
     description:
-      "Get a compact status report of the agent fleet: what each agent is " +
-      "working on and its latest activity. Call when anyone asks how things " +
-      "are going or what is running.",
+      "Report STATUS of the rooms: how many agents and what they are saying " +
+      "in their channels. Fire whenever anyone asks how it's going or what's " +
+      "running: 'how's it going in there?', 'what's everyone working on?', " +
+      "'give me a status', 'any update on the rooms?', 'where are we?' → " +
+      "check_progress. Then summarize ONLY what's new in two or three spoken " +
+      "sentences. NOT open_url — a status question never opens a browser.",
     // A required param on purpose: schemas with empty `properties` make
     // gemma-4 emit nameless function calls on the wire.
     parameters: {
@@ -52,100 +160,10 @@ export const TOOL_SCHEMAS = [
         scope: {
           type: "string",
           description:
-            "Which workstream to report on, or 'all' for the whole fleet.",
+            "Which room to report on (its topic), or 'all' for everything.",
         },
       },
       required: ["scope"],
-    },
-  },
-  {
-    type: "function",
-    name: "write_page",
-    description:
-      "Create a brand-new page on the live prototype site shown on the room " +
-      "screen. Renders in seconds. Use for any new page, screen, landing " +
-      "page or visual idea.",
-    parameters: {
-      type: "object",
-      properties: {
-        path: {
-          type: "string",
-          description:
-            "URL slug for the new page, lowercase kebab-case, descriptive, " +
-            "e.g. 'pricing' or 'purrbnb-landing'. Never 'home' — that is " +
-            "the protected site index.",
-        },
-        description: {
-          type: "string",
-          description:
-            "Vivid, specific one-paragraph description of the page: purpose, " +
-            "sections, headline copy, vibe. The more concrete, the better " +
-            "the result.",
-        },
-      },
-      required: ["path", "description"],
-    },
-  },
-  {
-    type: "function",
-    name: "edit_page",
-    description:
-      "Modify an existing page on the live prototype site. Renders in " +
-      "seconds. Use when the team wants changes to something already on " +
-      "screen.",
-    parameters: {
-      type: "object",
-      properties: {
-        path: {
-          type: "string",
-          description: "Slug of the existing page, e.g. 'pricing'.",
-        },
-        instructions: {
-          type: "string",
-          description: "Specific changes to make, 1-3 sentences.",
-        },
-      },
-      required: ["path", "instructions"],
-    },
-  },
-  {
-    type: "function",
-    name: "set_page_model",
-    description:
-      "Switch the model that writes prototype pages. ChatJimmy is the " +
-      "fastest (a page in under a second) but the least smart; the others " +
-      "are slower but sharper. Call when the team asks for a smarter or " +
-      "faster page model, e.g. 'use the smart model for pages'.",
-    parameters: {
-      type: "object",
-      properties: {
-        model: {
-          type: "string",
-          enum: ["jimmy", "gemini-flash", "haiku", "inworld-gemma"],
-          description:
-            "jimmy = fastest; gemini-flash and haiku = smart and fast; " +
-            "inworld-gemma = the same model as the voice.",
-        },
-      },
-      required: ["model"],
-    },
-  },
-  {
-    type: "function",
-    name: "open_page",
-    description:
-      "Navigate the room screen to a page that ALREADY EXISTS on the " +
-      "prototype site. For a page that does not exist yet, call write_page " +
-      "instead — never open_page.",
-    parameters: {
-      type: "object",
-      properties: {
-        path: {
-          type: "string",
-          description: "Slug of the page to show, or 'home' for the index.",
-        },
-      },
-      required: ["path"],
     },
   },
 ] as const;

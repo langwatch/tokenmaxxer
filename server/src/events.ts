@@ -46,15 +46,9 @@ export interface TranscriptEvent {
   at: number;
 }
 
-export interface SettingsEvent {
-  type: "tokenmaxxer.settings";
-  pageModel: string;
-}
-
 export type TokenmaxxerEvent =
   | ToolEvent
   | FleetEvent
   | NavigateEvent
   | StatusEvent
-  | TranscriptEvent
-  | SettingsEvent;
+  | TranscriptEvent;

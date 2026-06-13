@@ -1,29 +1,10 @@
-import fs from "node:fs";
-import path from "node:path";
-import { config } from "../config.js";
 import { desktop, pageSlot } from "../desktop/index.js";
-import {
-  editPageRequest,
-  generatePageCode,
-  writePageRequest,
-} from "../jimmy/client.js";
-import { PAGE_MODELS, type PageModelId } from "../jimmy/models.js";
 import { log } from "../log.js";
-import { fleet } from "../orchestrator/fleet.js";
-import { settings } from "../settings.js";
+import { resolveProject } from "../orchestrator/projects.js";
+import { rooms } from "../orchestrator/room.js";
 
-/** The room's single prototype window — re-pointed as pages change. */
-const PROTOTYPE_WINDOW_KEY = "prototype";
-
-/** Pop (or re-point) the real prototype browser window to a page. */
-function showPageOnDesktop(slug: string): void {
-  const url = `${config.playgroundUrl}/${slug}`;
-  void desktop().openBrowser({
-    url,
-    key: PROTOTYPE_WINDOW_KEY,
-    slot: pageSlot(),
-  });
-}
+/** The room's single browser window — re-pointed as URLs are opened. */
+const SCREEN_WINDOW_KEY = "screen";
 
 export interface ToolOutcome {
   output: Record<string, unknown>;
@@ -33,157 +14,84 @@ export interface ToolOutcome {
 
 type Handler = (args: Record<string, unknown>) => Promise<ToolOutcome>;
 
-function slugify(raw: string): string {
-  const slug = String(raw)
-    .toLowerCase()
-    .replace(/\.tsx$/, "")
-    .replace(/^\/+/, "")
-    .replace(/[^a-z0-9-]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-  if (!slug) throw new Error(`unusable page path: ${raw}`);
-  return slug;
-}
-
-function pageFile(slug: string): string {
-  return path.join(config.playgroundDir, "src", "pages", `${slug}.tsx`);
-}
-
 const handlers: Record<string, Handler> = {
-  async dispatch_work(args) {
-    const mission = String(args.mission ?? "");
-    const topic = String(args.topic ?? "untitled work");
-    if (!mission) throw new Error("dispatch_work needs a mission");
-    const note = fleet.dispatch(mission, topic);
-    return { output: { status: "dispatched", note } };
+  async spawn_room(args) {
+    const mission = String(args.mission ?? "").trim();
+    const topic = String(args.topic ?? "").trim() || "the mission";
+    if (!mission) throw new Error("spawn_room needs a mission");
+    const agents =
+      typeof args.agents === "number" ? args.agents : Number(args.agents) || undefined;
+    const project = args.project ? String(args.project) : undefined;
+    const note = rooms.spawnRoom({ mission, topic, agents, project });
+    return { output: { status: "spawning", note } };
   },
 
-  async check_progress() {
-    return { output: { report: fleet.progressReport() } };
+  async message_room(args) {
+    const topic = String(args.topic ?? "").trim();
+    const message = String(args.message ?? "").trim();
+    if (!topic || !message) throw new Error("message_room needs a topic and a message");
+    const note = rooms.messageRoom({ topic, message });
+    return { output: { status: "sent", note } };
   },
 
-  async set_page_model(args) {
-    const id = String(args.model ?? "") as PageModelId;
-    const model = PAGE_MODELS[id];
-    if (!model) {
-      return {
-        output: {
-          status: "unknown_model",
-          note: `No page model "${id}". Choose one of: ${Object.keys(PAGE_MODELS).join(", ")}.`,
-        },
-      };
-    }
-    if (!model.available()) {
-      return {
-        output: {
-          status: "unavailable",
-          note: `${model.label} is not configured (missing API key).`,
-        },
-      };
-    }
-    settings.setPageModel(id);
+  async add_agents(args) {
+    const topic = String(args.topic ?? "").trim();
+    if (!topic) throw new Error("add_agents needs a topic");
+    const count =
+      typeof args.count === "number" ? args.count : Number(args.count) || undefined;
+    const note = rooms.addAgents({ topic, count });
+    return { output: { status: "added", note } };
+  },
+
+  async open_url(args) {
+    const url = resolveOpenUrl(String(args.url ?? ""), args.label ? String(args.label) : undefined);
+    if (!url) throw new Error("open_url needs a url");
+    log("tools", `open_url ${url}`);
+    void desktop().openBrowser({ url, key: SCREEN_WINDOW_KEY, slot: pageSlot() });
     return {
       output: {
-        status: "switched",
-        model: id,
-        note: `Pages now use ${model.label}.`,
+        status: "opened",
+        url,
+        note: `On the screen now${args.label ? ` (${String(args.label)})` : ""}.`,
       },
+      navigate: url,
     };
   },
 
-  async write_page(args) {
-    const slug = slugify(String(args.path ?? ""));
-    if (slug === "home") {
-      return {
-        output: {
-          status: "protected",
-          note:
-            "/home is the site index and cannot be overwritten. Call " +
-            "write_page again with a descriptive new slug (e.g. " +
-            "'purrbnb-landing').",
-        },
-      };
-    }
-    const description = String(args.description ?? "");
-    const result = await generatePageCode(writePageRequest(slug, description));
-    fs.mkdirSync(path.dirname(pageFile(slug)), { recursive: true });
-    fs.writeFileSync(pageFile(slug), result.code);
-    log("tools", `write_page /${slug} via ${result.model} in ${result.elapsedMs}ms`);
-    showPageOnDesktop(slug);
-    return {
-      output: {
-        status: "live",
-        page: `/${slug}`,
-        note:
-          `Page is on the room screen (generated in ${(result.elapsedMs / 1000).toFixed(1)}s). ` +
-          "Confirm briefly; do not call page tools again unless the team asks for more.",
-      },
-      navigate: `/${slug}`,
-    };
-  },
-
-  async edit_page(args) {
-    const slug = slugify(String(args.path ?? ""));
-    const instructions = String(args.instructions ?? "");
-    const file = pageFile(slug);
-    if (!fs.existsSync(file)) {
-      const pages = listPages();
-      return {
-        output: {
-          status: "not_found",
-          note: `No page "/${slug}". Existing pages: ${pages.join(", ") || "(none)"}. Use write_page for new pages.`,
-        },
-      };
-    }
-    const currentCode = fs.readFileSync(file, "utf8");
-    const result = await generatePageCode(
-      editPageRequest(slug, instructions, currentCode),
-    );
-    fs.writeFileSync(file, result.code);
-    log("tools", `edit_page /${slug} via ${result.model} in ${result.elapsedMs}ms`);
-    showPageOnDesktop(slug);
-    return {
-      output: {
-        status: "live",
-        page: `/${slug}`,
-        note: `Edit is on the room screen (${(result.elapsedMs / 1000).toFixed(1)}s).`,
-      },
-      navigate: `/${slug}`,
-    };
-  },
-
-  async open_page(args) {
-    const raw = String(args.path ?? "home");
-    const slug = raw === "home" || raw === "/" ? "" : slugify(raw);
-    if (slug && !fs.existsSync(pageFile(slug))) {
-      // Teach the model instead of pretending: it will self-correct to
-      // write_page in the same conversation.
-      const pages = listPages();
-      return {
-        output: {
-          status: "not_found",
-          note:
-            `No page "/${slug}" exists yet. Existing pages: ` +
-            `${pages.join(", ") || "(none)"}. Call write_page to create it.`,
-        },
-      };
-    }
-    showPageOnDesktop(slug);
-    return {
-      output: { status: "shown", page: `/${slug}` },
-      navigate: `/${slug}`,
-    };
+  async check_progress(args) {
+    const scope = String(args.scope ?? "all");
+    const report = await rooms.progressReport(scope);
+    return { output: { report } };
   },
 };
 
-function listPages(): string[] {
-  try {
-    return fs
-      .readdirSync(path.join(config.playgroundDir, "src", "pages"))
-      .filter((f) => f.endsWith(".tsx"))
-      .map((f) => `/${f.replace(/\.tsx$/, "")}`);
-  } catch {
-    return [];
+/**
+ * Turn whatever the voice model passes into a real URL. A genuine remote URL
+ * (a GitHub issue, a dashboard) is trusted exactly as given. But the model
+ * loves to invent a dev port ("localhost:3000") or just name the site ("the
+ * website") — those resolve to the project's real URL from the registry, so
+ * "pull up the website" always lands on the running site, not a guess.
+ */
+export function resolveOpenUrl(rawUrl: string, label?: string): string {
+  const raw = rawUrl.trim();
+  const localGuess = /^(https?:\/\/)?(localhost|127\.0\.0\.1)(:\d+)?\/?$/i.test(raw);
+  if (/^https?:\/\//i.test(raw) && !localGuess) return raw;
+  // A bare phrase ("the website") has no dot or slash; a localhost guess or an
+  // empty url both mean "the site we're talking about".
+  const looksLikePhrase = !/[./]/.test(raw);
+  if (localGuess || looksLikePhrase || !raw) {
+    const project = resolveProject(`${raw} ${label ?? ""}`);
+    if (project.url) return project.url;
   }
+  return normalizeUrl(raw);
+}
+
+/** Add a scheme to a partial-but-real URL ("example.com/x" → https://…). */
+function normalizeUrl(raw: string): string {
+  if (!raw) return raw;
+  if (/^https?:\/\//i.test(raw)) return raw;
+  if (/^(localhost|127\.0\.0\.1|\d+\.\d+\.\d+\.\d+)/.test(raw)) return `http://${raw}`;
+  return `https://${raw}`;
 }
 
 export async function executeTool(
