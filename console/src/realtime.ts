@@ -53,6 +53,9 @@ export class RoomClient {
   private mediaStream: MediaStream | null = null;
   private listeners = new Set<Listener>();
   private shouldReconnect = false;
+  /** Real mic audio has been streamed since the last commit — so muting fires
+   *  an end-of-turn only when there's actually something to commit. */
+  private spokeSinceCommit = false;
 
   state: RoomState = {
     connection: "idle",
@@ -140,6 +143,7 @@ export class RoomClient {
     // room can't re-trigger a turn while muted.
     const pcm = new Int16Array(samples.length);
     if (!this.state.muted) {
+      this.spokeSinceCommit = true;
       for (let i = 0; i < samples.length; i++) {
         const s = Math.max(-1, Math.min(1, samples[i]));
         pcm[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
@@ -218,18 +222,29 @@ export class RoomClient {
     void this.audioCtx?.close();
     this.audioCtx = null;
     this.playbackNode = null;
+    this.spokeSinceCommit = false;
     this.update({ connection: "idle", agentTalking: false, muted: false });
   }
 
   /**
    * Mute/unmute the mic. Muted swaps the mic for silence on the wire (see
-   * sendAudio): the VAD gets a clean end-of-turn and commits what was said, and
-   * a noisy room can't re-trigger. The track stays live on purpose so the
-   * capture worklet keeps firing — a disabled track can stop it, which would
-   * stop the silence frames and leave the turn hanging.
+   * sendAudio) so a noisy room can't re-trigger, and the track stays live so the
+   * capture worklet keeps firing those silence frames. On the mute transition we
+   * also commit the buffer + ask for a reply, so Max responds to what was just
+   * said immediately instead of waiting for the VAD to notice the silence.
    */
   setMuted(muted: boolean) {
+    if (muted === this.state.muted) return;
     this.update({ muted });
+    if (muted) this.commitTurn();
+  }
+
+  /** Force end-of-turn: commit the buffered speech and trigger Max's reply. */
+  private commitTurn() {
+    if (this.ws?.readyState !== WebSocket.OPEN || !this.spokeSinceCommit) return;
+    this.spokeSinceCommit = false;
+    this.ws.send(JSON.stringify({ type: "input_audio_buffer.commit" }));
+    this.ws.send(JSON.stringify({ type: "response.create" }));
   }
 }
 
