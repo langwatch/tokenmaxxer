@@ -45,4 +45,8 @@ export const config = {
 
   /** Prefix for kanban slugs so fleet agents are recognizable and filterable. */
   fleetPrefix: "tmx-",
+
+  /** When set, the fleet routes and tracks but never launches real agents —
+   * used by routing tests to assert tool choice without spawning tmux. */
+  fleetDryRun: process.env.TOKENMAXXER_FLEET_DRYRUN === "1",
 };

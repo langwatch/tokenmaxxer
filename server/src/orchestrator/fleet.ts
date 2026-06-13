@@ -150,6 +150,13 @@ export class FleetManager extends EventEmitter {
     this.agents.set(slug, agent);
     this.emitFleet();
 
+    if (config.fleetDryRun) {
+      agent.status = "working";
+      agent.lastActivity = "dry-run (no agent launched)";
+      this.emitFleet();
+      return;
+    }
+
     const result = await kanbanLaunch(slug, workspace, config.agentModel);
     agent.tmuxName = result.tmuxName;
     // Pop a real terminal so the room watches the agent work live.

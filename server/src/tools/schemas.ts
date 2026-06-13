@@ -8,13 +8,14 @@ export const TOOL_SCHEMAS = [
     type: "function",
     name: "dispatch_work",
     description:
-      "Dispatch a mission to the unlimited agent fleet. Fire-and-forget: an " +
-      "agent (new or the one already on that topic) starts immediately in the " +
-      "background. Use for research, building features or backends, drafts, " +
-      "analysis — anything beyond a single visual page. Call it the moment " +
-      "work is mentioned; never ask permission first. Phrases like 'get an " +
-      "agent on it', 'someone should look into X', 'let's research X', " +
-      "'we need a report on X' ALWAYS mean: call dispatch_work now.",
+      "Dispatch real engineering or research WORK to a Claude Code agent that " +
+      "opens in a terminal: implementing a feature, a backend, an API, " +
+      "auth/login, an integration, a data pipeline, research, analysis, or a " +
+      "document. Anything that needs real code, a repo, or investigation — " +
+      "even when phrased as 'build'. NOT for webpages or visual prototypes " +
+      "(use write_page for those). Fire-and-forget; call it the moment work " +
+      "is mentioned, never ask permission. 'Implement X', 'build an " +
+      "integration', 'research X', 'someone should look into X' → dispatch_work.",
     parameters: {
       type: "object",
       properties: {
