@@ -24,8 +24,11 @@ async function check(name: string, fn: () => Promise<string | void>) {
   }
 }
 
+const SITE_URL = process.env.TOKENMAXXER_SITE_URL ?? "http://127.0.0.1:5173";
+
 await check("env keys", async () => {
-  const required = ["INWORLD_API_KEY", "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GEMINI_API_KEY"];
+  // INWORLD drives the voice; OPENAI is the whisper shim for manual turns.
+  const required = ["INWORLD_API_KEY", "OPENAI_API_KEY"];
   const missing = required.filter((k) => !process.env[k]);
   if (missing.length) throw new Error(`missing ${missing.join(", ")}`);
 });
@@ -35,26 +38,49 @@ await check("tmux", async () => {
   return stdout.trim();
 });
 
-await check("desktop apps (Chrome + a terminal)", async () => {
-  const has = async (name: string) => {
-    for (const base of ["/Applications", "/System/Applications"]) {
-      try {
-        await exec("test", ["-d", `${base}/${name}.app`]);
-        return true;
-      } catch {
-        // not here
-      }
+const hasApp = async (name: string) => {
+  for (const base of ["/Applications", "/System/Applications"]) {
+    try {
+      await exec("test", ["-d", `${base}/${name}.app`]);
+      return true;
+    } catch {
+      // not here
     }
-    return false;
-  };
-  if (!(await has("Google Chrome"))) throw new Error("Google Chrome not installed");
-  const term = (await has("Warp")) ? "Warp" : (await has("iTerm")) ? "iTerm" : "Terminal";
+  }
+  return false;
+};
+
+await check("desktop apps (Chrome + a terminal)", async () => {
+  if (!(await hasApp("Google Chrome"))) throw new Error("Google Chrome not installed");
+  const term = (await hasApp("Warp")) ? "Warp" : (await hasApp("iTerm")) ? "iTerm" : "Terminal";
   return `Chrome + ${term}`;
+});
+
+await check("KanbanCode app (the board)", async () => {
+  const { stdout } = await exec("pgrep", ["-f", "KanbanCode.app"]).catch(() => ({
+    stdout: "",
+  }));
+  if (!stdout.trim()) throw new Error("KanbanCode not running — open it so the board shows the rooms");
+  return "running";
 });
 
 await check("kanban CLI", async () => {
   const { stdout } = await exec("kanban", ["--version"]);
   return stdout.trim();
+});
+
+await check("kanban channels (the agent loop)", async () => {
+  // Prove the channel mechanism end to end: create, post as max, read back, clean up.
+  const chan = `preflight-${process.pid}`;
+  try {
+    await exec("kanban", ["channel", "create", chan, "--as", "max", "--json"]);
+    await exec("kanban", ["channel", "send", chan, "ping", "--as", "max", "--json"]);
+    const { stdout } = await exec("kanban", ["channel", "history", chan, "-n", "5"]);
+    if (!/ping/.test(stdout)) throw new Error("message did not land in history");
+    return "create + send + history ok";
+  } finally {
+    await exec("kanban", ["channel", "delete", chan]).catch(() => {});
+  }
 });
 
 await check("claude CLI", async () => {
@@ -67,8 +93,8 @@ await check("gateway :4870", async () => {
     signal: AbortSignal.timeout(3000),
   });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const data = (await res.json()) as { fleet: number };
-  return `fleet=${data.fleet}`;
+  const data = (await res.json()) as { fleet: number; rooms: number };
+  return `rooms=${data.rooms}, agents=${data.fleet}`;
 });
 
 await check("console :5170 (styled)", async () => {
@@ -85,32 +111,9 @@ await check("console :5170 (styled)", async () => {
   }
 });
 
-await check("playground :5171", async () => {
-  const res = await fetch("http://localhost:5171/", { signal: AbortSignal.timeout(3000) });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-});
-
-await check("jimmy proxy", async () => {
-  const res = await fetch("http://localhost:4100/v1/models", {
-    signal: AbortSignal.timeout(3000),
-  });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-});
-
-await check("jimmy speed", async () => {
-  const t0 = Date.now();
-  const res = await fetch("http://localhost:4100/v1/chat/completions", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: "llama3.1-8B",
-      messages: [{ role: "user", content: "Say ok." }],
-      max_tokens: 5,
-    }),
-    signal: AbortSignal.timeout(10_000),
-  });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return `${Date.now() - t0}ms`;
+await check(`website ${SITE_URL}`, async () => {
+  const res = await fetch(SITE_URL, { signal: AbortSignal.timeout(3000) });
+  if (!res.ok) throw new Error(`HTTP ${res.status} — start it with: cd ~/Projects/2lang-2watch && pnpm dev`);
 });
 
 await check("inworld realtime (gemma-4)", async () => {
@@ -164,24 +167,6 @@ await check("inworld realtime (gemma-4)", async () => {
       }
     });
   });
-});
-
-await check("anthropic (brain)", async () => {
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "x-api-key": process.env.ANTHROPIC_API_KEY!,
-      "anthropic-version": "2023-06-01",
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: "claude-haiku-4-5",
-      max_tokens: 5,
-      messages: [{ role: "user", content: "ok?" }],
-    }),
-    signal: AbortSignal.timeout(15_000),
-  });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
 });
 
 console.log(failures === 0 ? "\n🚀 ALL SYSTEMS GO" : `\n💥 ${failures} check(s) failing`);
