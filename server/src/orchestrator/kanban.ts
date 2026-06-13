@@ -135,6 +135,30 @@ export async function kanbanChannelHistory(
   }
 }
 
+/**
+ * Force a launched agent into a channel by its card identity, so membership
+ * never depends on the agent running `kanban channel join` itself — claude
+ * tends to dive straight into the mission and skip or delay it, leaving the
+ * swarm invisible. Joining on behalf with the card id links the agent's tmux
+ * session, so it still receives the channel's broadcasts in its pane.
+ */
+export async function kanbanChannelJoinAs(
+  channel: string,
+  handle: string,
+  cardId: string,
+): Promise<void> {
+  await exec("kanban", [
+    "channel",
+    "join",
+    channel,
+    "--as",
+    handle,
+    "--as-card-id",
+    cardId,
+    "--json",
+  ]);
+}
+
 /** Bring the KanbanCode app forward, focused on a channel (deep link). */
 export async function kanbanChannelOpen(channel: string): Promise<void> {
   try {

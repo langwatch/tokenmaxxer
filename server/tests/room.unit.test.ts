@@ -58,11 +58,12 @@ describe("coordinate-first agent brief (the delegation contract)", () => {
   it("carries the mission", () => {
     expect(brief).toContain("ship a full dark mode");
   });
-  it("tells the agent to JOIN the channel before building", () => {
-    const joinAt = brief.indexOf(`kanban channel join full-dark-mode`);
-    const buildAt = brief.indexOf("Build it");
-    expect(joinAt).toBeGreaterThan(-1);
-    expect(buildAt).toBeGreaterThan(joinAt); // join precedes build
+  it("tells the agent it is already in the channel and to coordinate before building", () => {
+    expect(brief).toContain("already in the kanban channel #full-dark-mode");
+    const historyAt = brief.indexOf(`kanban channel history full-dark-mode`);
+    const buildAt = brief.indexOf("then build");
+    expect(historyAt).toBeGreaterThan(-1);
+    expect(buildAt).toBeGreaterThan(historyAt); // catch up + claim before building
   });
   it("tells the agent to coordinate in the channel", () => {
     expect(brief.toLowerCase()).toContain("coordinate");

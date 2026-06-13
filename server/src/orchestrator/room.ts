@@ -9,7 +9,7 @@ import {
   kanbanCapture,
   kanbanChannelCreate,
   kanbanChannelHistory,
-  kanbanChannelMembers,
+  kanbanChannelJoinAs,
   kanbanChannelSend,
   kanbanKill,
   kanbanLaunch,
@@ -223,13 +223,25 @@ export class RoomManager extends EventEmitter {
     await Promise.all(launched.map((name) => this.deliverMission(room, name, teammates)));
   }
 
-  /** Phase 1: create the tmux session and pop its terminal. */
+  /** Phase 1: create the tmux session, force-join the channel, pop the terminal. */
   private async launchSession(room: Room, name: string): Promise<boolean> {
     const agent = room.agents.get(name);
     if (!agent) return false;
     try {
       const result = await kanbanLaunch(agent.slug, room.workspace, config.agentModel);
       agent.tmuxName = result.tmuxName;
+      // Force the agent into the channel by its card identity now, so the swarm
+      // is visible regardless of whether claude later runs `kanban channel join`
+      // itself (it tends to dive into the mission and skip it). The card link
+      // means the agent still receives the channel's broadcasts in its pane.
+      if (result.card?.id) {
+        try {
+          await kanbanChannelJoinAs(room.channel, agentHandle(agent.slug), result.card.id);
+          agent.lastActivity = "joined the channel";
+        } catch (err) {
+          log("room", `force-join ${name} failed: ${(err as Error).message}`);
+        }
+      }
       void desktop().openTerminal({
         command: `tmux attach -t ${result.tmuxName}`,
         title: agent.slug,
@@ -247,11 +259,11 @@ export class RoomManager extends EventEmitter {
   }
 
   /**
-   * Phase 2: once claude is ready, hand it the coordinate-first mission, then
-   * confirm the agent actually joined the channel. Under load a cold REPL can
-   * still be drawing when the keystrokes arrive and swallow them, so if the
-   * handle hasn't appeared in the channel we wait for ready again and re-send.
-   * The join is the whole point — no join, no visible swarm.
+   * Phase 2: once claude's REPL is drawn, hand it the mission ONCE. Membership
+   * is already guaranteed by the force-join in phase 1, so there's nothing to
+   * confirm or re-send here — re-sending only piled up queued prompts and
+   * confused a busy agent. If the keystrokes are somehow missed, the agent
+   * still sees the mission Max pinned in the channel it was joined to.
    */
   private async deliverMission(
     room: Room,
@@ -260,43 +272,17 @@ export class RoomManager extends EventEmitter {
   ): Promise<void> {
     const agent = room.agents.get(name);
     if (!agent) return;
-    const handle = agent.slug.replace(/[^a-z0-9]+/gi, "_").toLowerCase();
-    const prompt = agentPrompt(room, name, teammates);
     try {
       await waitForClaudeReady(agent.tmuxName, 60_000);
-      await kanbanSend(agent.tmuxName, prompt);
+      await kanbanSend(agent.tmuxName, agentPrompt(room, name, teammates));
       agent.status = "working";
-      agent.lastActivity = "mission delivered";
-      this.emitFleet();
-
-      if (!(await this.confirmJoined(room.channel, handle, 30_000))) {
-        log("room", `${name} not in #${room.channel} yet — re-sending mission`);
-        await waitForClaudeReady(agent.tmuxName, 30_000);
-        await kanbanSend(agent.tmuxName, prompt);
-        await this.confirmJoined(room.channel, handle, 30_000);
-      }
-      agent.lastActivity = "joined the channel";
+      agent.lastActivity = "on the mission";
     } catch (err) {
       agent.status = "gone";
       agent.lastActivity = `mission delivery failed: ${(err as Error).message}`;
       log("room", `deliver ${name} failed: ${(err as Error).message}`);
     }
     this.emitFleet();
-  }
-
-  /** Poll channel membership until the agent's handle appears. */
-  private async confirmJoined(
-    channel: string,
-    handle: string,
-    timeoutMs: number,
-  ): Promise<boolean> {
-    const deadline = Date.now() + timeoutMs;
-    while (Date.now() < deadline) {
-      const members = await kanbanChannelMembers(channel);
-      if (members.some((h) => h.toLowerCase() === handle)) return true;
-      await new Promise((r) => setTimeout(r, 1500));
-    }
-    return false;
   }
 
   /** Speak into an existing room as Max. Returns a spoken ack. */
@@ -439,6 +425,11 @@ export class RoomManager extends EventEmitter {
   private emitFleet(): void {
     this.emit("fleet", this.list());
   }
+}
+
+/** The channel handle for a launch slug: "tmx-aria" -> "tmx_aria". */
+function agentHandle(slug: string): string {
+  return slug.replace(/[^a-z0-9]+/gi, "_").toLowerCase();
 }
 
 function agentPrompt(room: Room, name: string, teammates: string[]): string {
