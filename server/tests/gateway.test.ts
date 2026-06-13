@@ -2,9 +2,11 @@
  * Gateway integration tests — a real server subprocess talking to the real
  * Inworld API, exercised the way the scenario adapter drives it. Binds
  * specs/voice-gateway.feature.
+ *
+ * Runs the room engine in dry-run so a spoken request that opens a browser or
+ * reads room state never launches real tmux agents. Not part of CI (needs the
+ * live Inworld API).
  */
-import fs from "node:fs";
-import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   GatewayClient,
@@ -12,25 +14,14 @@ import {
   type TestServer,
 } from "./helpers/gateway.js";
 
-const PLAYGROUND_PAGES = path.resolve(
-  import.meta.dirname,
-  "..",
-  "..",
-  "playground",
-  "src",
-  "pages",
-);
-const QA_PAGE = path.join(PLAYGROUND_PAGES, "qa-smoke.tsx");
-
 let server: TestServer;
 
 beforeAll(async () => {
-  server = await startTestServer();
+  server = await startTestServer({ TOKENMAXXER_FLEET_DRYRUN: "1" });
 });
 
 afterAll(() => {
   server?.stop();
-  fs.rmSync(QA_PAGE, { force: true });
 });
 
 describe("voice gateway", () => {
@@ -74,7 +65,7 @@ describe("voice gateway", () => {
     await client.connect(server.url);
     await client.configureManualTurns();
 
-    client.sayText("Status check — what is the fleet working on right now?");
+    client.sayText("Status check — what is everyone working on right now?");
     const finished = await client.waitFor(
       (e) =>
         e.type === "tokenmaxxer.tool" &&
@@ -82,7 +73,8 @@ describe("voice gateway", () => {
         e.phase === "finished",
       60_000,
     );
-    expect(String(finished.result)).toContain("Fleet is empty");
+    // No rooms have been spun up in this fresh session.
+    expect(String(finished.result)).toContain("No rooms running");
 
     // The spoken acknowledgement after the function-call round trip.
     await client.waitFor(
@@ -93,33 +85,27 @@ describe("voice gateway", () => {
     client.close();
   });
 
-  it("writes a real page through write_page and navigates the room screen", async () => {
-    fs.rmSync(QA_PAGE, { force: true });
+  it("opens a real URL on the room screen through open_url and navigates", async () => {
     const client = new GatewayClient();
     await client.connect(server.url);
     await client.configureManualTurns();
 
-    client.sayText(
-      "Put a page called qa-smoke on the screen: a one-section page that " +
-        "says 'quality assurance lives here' with a big heading.",
-    );
+    client.sayText("Pull up the new website on the screen for us.");
     const finished = await client.waitFor(
       (e) =>
         e.type === "tokenmaxxer.tool" &&
-        (e.tool === "write_page" || e.tool === "edit_page") &&
+        e.tool === "open_url" &&
         e.phase === "finished",
       90_000,
     );
-    expect(String(finished.result)).toContain("live");
+    expect(String(finished.result)).toContain("opened");
 
-    expect(fs.existsSync(QA_PAGE), "page file not written").toBe(true);
-    const code = fs.readFileSync(QA_PAGE, "utf8");
-    expect(code).toContain("export default function Page()");
-
-    await client.waitFor(
-      (e) => e.type === "tokenmaxxer.navigate" && e.path === "/qa-smoke",
+    // The room screen is told to navigate to the opened URL.
+    const nav = await client.waitFor(
+      (e) => e.type === "tokenmaxxer.navigate",
       30_000,
     );
+    expect(String(nav.path)).toMatch(/^https?:\/\//);
     client.close();
   });
 });

@@ -1,70 +1,62 @@
 /**
- * Voice scenario tests for Max — REAL audio end to end. The scenario
- * user simulator speaks through TTS into the gateway; the gateway proxies
- * Inworld (STT + gemma-4 + TTS); tools execute server-side for real
- * (jimmy codegen, fleet dispatch with actual claude agents in tmux).
+ * Voice scenario tests for Max — REAL audio end to end. The scenario user
+ * simulator speaks through TTS into the gateway; the gateway proxies Inworld
+ * (STT + gemma-4 + TTS); tools execute server-side for real. The agent under
+ * test is the gateway itself: scenario's OpenAI Realtime adapter is pointed at
+ * the gateway WS endpoint, which speaks the same protocol. Binds
+ * specs/meeting-agent.feature and specs/room-orchestration.feature.
  *
- * The agent under test is the gateway itself: scenario's OpenAI Realtime
- * adapter is pointed at the gateway WS endpoint, which speaks the same
- * protocol. Binds specs/meeting-agent.feature.
+ * The room engine runs in dry-run: Max really makes the spawn_room / open_url
+ * tool calls (and really creates the kanban channel), but no tmux agents are
+ * launched — these scenarios prove Max's VOICE behaviour, not the swarm. The
+ * swarm is proven in QA + the live demo. Channels created here are cleaned up.
  *
  * Note on scripts: when Max fires a tool, the first response is tool-only;
- * the spoken acknowledgement arrives as a follow-up response after the
- * gateway executes the call. Hence the double `scenario.agent()` steps.
+ * the spoken acknowledgement arrives as a follow-up response after the gateway
+ * executes the call. Hence the double `scenario.agent()` steps.
  */
 import { execFileSync } from "node:child_process";
-import fs from "node:fs";
-import path from "node:path";
 import scenario from "@langwatch/scenario";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { resetRooms } from "../helpers/reset.js";
 import { startTestServer, type TestServer } from "../helpers/gateway.js";
 import { maxAgent } from "./helpers/max-agent.js";
 import { saveRecording } from "./helpers/save-recording.js";
 
-const PLAYGROUND_PAGES = path.resolve(
-  import.meta.dirname,
-  "..",
-  "..",
-  "..",
-  "playground",
-  "src",
-  "pages",
-);
-
 let server: TestServer;
-let pagesBefore = new Set<string>();
-let tmuxBefore = new Set<string>();
+let channelsBefore = new Set<string>();
 
-function listTmux(): Set<string> {
+function listChannels(): Set<string> {
   try {
-    return new Set(
-      execFileSync("tmux", ["list-sessions", "-F", "#S"], { encoding: "utf8" })
-        .trim()
-        .split("\n"),
-    );
+    const out = execFileSync("kanban", ["channel", "list", "--json"], {
+      encoding: "utf8",
+    });
+    return new Set((JSON.parse(out) as { name: string }[]).map((r) => r.name));
   } catch {
     return new Set();
   }
 }
 
 beforeAll(async () => {
-  pagesBefore = new Set(fs.readdirSync(PLAYGROUND_PAGES));
-  tmuxBefore = listTmux();
-  server = await startTestServer();
+  // Fresh state every run: kill any stale room agents and clear stale room
+  // channels. The served site is left alone — scenarios run dry-run and never
+  // touch it (use scripts/reset-rooms.ts for the full site baseline).
+  resetRooms({ site: false });
+  channelsBefore = listChannels();
+  server = await startTestServer({ TOKENMAXXER_FLEET_DRYRUN: "1" });
 });
 
 afterAll(() => {
   server?.stop();
-  // Remove pages and tmux agents created during the voice runs.
-  for (const f of fs.readdirSync(PLAYGROUND_PAGES)) {
-    if (!pagesBefore.has(f)) fs.rmSync(path.join(PLAYGROUND_PAGES, f));
-  }
-  for (const session of listTmux()) {
-    if (!tmuxBefore.has(session) && session.startsWith("tmx-")) {
+  // spawn_room creates real channels as a side effect — remove the new ones.
+  for (const name of listChannels()) {
+    if (!channelsBefore.has(name)) {
       try {
-        execFileSync("tmux", ["kill-session", "-t", session]);
+        execFileSync("kanban", ["channel", "delete", name, "--json"], {
+          stdio: "ignore",
+        });
       } catch {
-        // already gone
+        // best effort
       }
     }
   }
@@ -78,26 +70,25 @@ function maxUnderTest() {
 }
 
 describe.sequential("Max — meeting room voice agent", () => {
-  it("dispatches work the moment an idea is actionable, without asking permission", async () => {
+  it("spins up a room of agents the moment work is mentioned, without asking permission", async () => {
     const result = await scenario.run({
-      name: "idea becomes dispatched work",
+      name: "idea becomes a room of agents",
       description:
-        "A startup founder in a meeting room thinks out loud about a new " +
-        "idea and wants it explored. Max should dispatch the work " +
-        "immediately and acknowledge in very few words.",
+        "A founder in a meeting room wants real work done. Max should spin " +
+        "up a room of agents immediately and acknowledge in very few words.",
       agents: [
         maxUnderTest(),
         scenario.userSimulatorAgent({
           voice: "elevenlabs/EXAVITQu4vr4xnSDxMaL",
           persona:
             "You are a startup founder SPEAKING in a meeting room, excited " +
-            "and fast. Natural spoken sentences. You just had an idea: an " +
-            "airbnb for cat sitters. You want the market researched right " +
-            "away. 1-2 sentences per turn.",
+            "and fast. Natural spoken sentences. You want a full dark mode " +
+            "built for your website and you want a few agents on it right " +
+            "now. 1-2 sentences per turn.",
         }),
         scenario.judgeAgent({
           criteria: [
-            "Max made a dispatch_work tool call for the cat sitter idea",
+            "Max made a spawn_room tool call for the dark mode work",
             "Max acknowledged out loud in one short sentence without asking for permission or more details",
             "Max did not lecture or enumerate options",
           ],
@@ -114,7 +105,7 @@ describe.sequential("Max — meeting room voice agent", () => {
     expect(result.success, result.reasoning).toBe(true);
 
     // Listenable proof: both sides actually spoke.
-    const dir = saveRecording(result.audio, "dispatch-on-idea");
+    const dir = saveRecording(result.audio, "room-on-idea");
     expect(dir, "no audio recording captured").not.toBeNull();
     const speakers = new Set(result.audio!.segments.map((s) => s.speaker));
     expect(speakers.has("user"), "no user audio in recording").toBe(true);
@@ -128,10 +119,47 @@ describe.sequential("Max — meeting room voice agent", () => {
       const types = m.content.map((p) => (p as { type?: string }).type);
       return types.includes("file") && types.includes("text");
     });
-    expect(agentAudioWithText, "agent audio message is missing its transcript text part").toBe(true);
+    expect(
+      agentAudioWithText,
+      "agent audio message is missing its transcript text part",
+    ).toBe(true);
   }, 240_000);
 
-  it("answers progress questions from fleet state", async () => {
+  it("pulls a site up on the room screen when asked to see something", async () => {
+    const result = await scenario.run({
+      name: "spoken request opens a browser",
+      description:
+        "A founder asks to see the new website on the room screen. Max " +
+        "should open it with open_url and confirm briefly.",
+      agents: [
+        maxUnderTest(),
+        scenario.userSimulatorAgent({
+          voice: "openai/nova",
+          persona:
+            "You are SPEAKING in a meeting room. Ask Max to pull up the new " +
+            "website on the screen so everyone can see it. One sentence.",
+        }),
+        scenario.judgeAgent({
+          criteria: [
+            "Max made an open_url tool call for the website",
+            "Max indicated out loud, briefly, that it is on the screen",
+            "Max did not try to build or edit the page itself",
+          ],
+        }),
+      ],
+      script: [
+        scenario.user(),
+        scenario.agent(),
+        scenario.agent(),
+        scenario.judge(),
+      ],
+      maxTurns: 8,
+    });
+    expect(result.success, result.reasoning).toBe(true);
+    saveRecording(result.audio, "site-on-screen");
+  }, 240_000);
+
+  it("answers progress questions from the room channels", async () => {
     const result = await scenario.run({
       name: "progress check",
       description:
@@ -143,12 +171,12 @@ describe.sequential("Max — meeting room voice agent", () => {
           voice: "openai/nova",
           persona:
             "You are SPEAKING in a meeting room. Ask Max how things are " +
-            "going with the work, naturally, in one sentence.",
+            "going in the rooms, naturally, in one sentence.",
         }),
         scenario.judgeAgent({
           criteria: [
             "Max made a check_progress tool call",
-            "Max reported the fleet status out loud briefly (it is fine if the fleet is empty)",
+            "Max reported the status out loud briefly (it is fine if no rooms are running yet)",
           ],
         }),
       ],
@@ -164,102 +192,43 @@ describe.sequential("Max — meeting room voice agent", () => {
     saveRecording(result.audio, "progress-check");
   }, 240_000);
 
-  it("paints a page on the room screen when asked for something visual", async () => {
-    const scenarioStart = Date.now();
+  it("opens a GitHub issue, then spins a room to fix it", async () => {
     const result = await scenario.run({
-      name: "spoken page request renders on screen",
+      name: "issue on screen then a room to fix it",
       description:
-        "A founder asks for a landing page for their startup to be put on " +
-        "the room screen. Max should create the page with write_page and " +
-        "confirm it is on screen.",
-      agents: [
-        maxUnderTest(),
-        scenario.userSimulatorAgent({
-          voice: "openai/nova",
-          persona:
-            "You are SPEAKING in a meeting room. Ask for a landing page " +
-            "for your startup 'PurrBnB' (airbnb for cat sitters) to be put " +
-            "up on the screen. One sentence.",
-        }),
-        scenario.judgeAgent({
-          criteria: [
-            "Max made a write_page tool call for a PurrBnB-related page",
-            "Max indicated out loud, briefly, that the page is on or going to the screen",
-          ],
-        }),
-      ],
-      script: [
-        scenario.user(),
-        scenario.agent(),
-        scenario.agent(),
-        scenario.judge(),
-      ],
-      maxTurns: 8,
-    });
-    expect(result.success, result.reasoning).toBe(true);
-
-    // A page file was really written during this scenario (created or
-    // overwritten — the model picks the slug, which may collide).
-    const touched = fs
-      .readdirSync(PLAYGROUND_PAGES)
-      .filter((f) => f !== "home.tsx")
-      .filter(
-        (f) =>
-          fs.statSync(path.join(PLAYGROUND_PAGES, f)).mtimeMs >= scenarioStart,
-      );
-    expect(touched.length, "no page file was written").toBeGreaterThan(0);
-    const code = fs.readFileSync(path.join(PLAYGROUND_PAGES, touched[0]), "utf8");
-    expect(code).toContain("export default function Page()");
-    saveRecording(result.audio, "page-on-screen");
-  }, 240_000);
-
-  it("changes a page mid-conversation when the team changes its mind", async () => {
-    const scenarioStart = Date.now();
-    const result = await scenario.run({
-      name: "spoken edit lands on the same page",
-      description:
-        "A founder asks for a simple waitlist page, then changes their mind " +
-        "about the copy. Max should create the page, then edit the SAME " +
-        "page rather than making a new one, confirming briefly each time.",
+        "The team spotted a GitHub issue. Max should first put it on the " +
+        "screen (open_url), then when asked, spin up a room of agents to fix " +
+        "it (spawn_room) — confirming briefly each time.",
       agents: [
         maxUnderTest(),
         scenario.userSimulatorAgent({
           voice: "openai/nova",
           persona:
             "You are SPEAKING in a meeting room, decisive and brief. First " +
-            "ask for a waitlist signup page for your startup 'RoboBarista' " +
-            "on the screen. After it is up, say the headline should mention " +
-            "coffee robots — one short sentence.",
+            "ask Max to open issue 1234 on langwatch on the screen. After it " +
+            "is up, ask him to get a couple of agents to fix it. One short " +
+            "sentence per turn.",
         }),
         scenario.judgeAgent({
           criteria: [
-            "Max created a page with write_page for RoboBarista",
-            "When the user changed their mind, Max used edit_page (not another write_page) on the same page",
+            "Max made an open_url tool call for the langwatch issue 1234",
+            "When asked to fix it, Max made a spawn_room tool call (not another open_url)",
             "Max confirmed each step out loud in one short sentence",
           ],
         }),
       ],
       script: [
         scenario.user(),
-        scenario.agent(), // write_page tool turn
+        scenario.agent(), // open_url tool turn
         scenario.agent(), // spoken confirmation
         scenario.user(),
-        scenario.agent(), // edit_page tool turn
+        scenario.agent(), // spawn_room tool turn
         scenario.agent(), // spoken confirmation
         scenario.judge(),
       ],
       maxTurns: 12,
     });
     expect(result.success, result.reasoning).toBe(true);
-
-    const touched = fs
-      .readdirSync(PLAYGROUND_PAGES)
-      .filter((f) => f !== "home.tsx")
-      .filter(
-        (f) =>
-          fs.statSync(path.join(PLAYGROUND_PAGES, f)).mtimeMs >= scenarioStart,
-      );
-    expect(touched.length, "no page file was written").toBeGreaterThan(0);
-    saveRecording(result.audio, "edit-mid-conversation");
+    saveRecording(result.audio, "issue-then-room");
   }, 300_000);
 });
