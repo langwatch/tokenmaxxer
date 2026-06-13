@@ -1,105 +1,33 @@
-import { config } from "../config.js";
 import { log } from "../log.js";
 import { tracer } from "../observability.js";
+import { settings } from "../settings.js";
 import {
-  PAGE_SYSTEM_PROMPT,
-  editPagePrompt,
-  retryPrompt,
-  wrapBody,
-  writePagePrompt,
-} from "./prompts.js";
+  PAGE_MODELS,
+  systemMessage,
+  type ChatMessage,
+  type PageModel,
+  type PageModelId,
+} from "./models.js";
+import { editPagePrompt, retryPrompt, wrapBody, writePagePrompt } from "./prompts.js";
 import { extractJsxBody, validatePage } from "./validate.js";
 
-interface ChatMessage {
-  role: "system" | "user" | "assistant";
-  content: string;
-}
-
-interface SpeedModel {
-  name: string;
-  url: string;
-  model: string;
-  apiKey?: string;
-  /** Per-attempt transport timeout. */
-  timeoutMs: number;
-  extraBody?: Record<string, unknown>;
-}
-
 /**
- * The speed chain: fastest first, smarter fallbacks after. Order grounded
- * in scripts/experiment-codegen.ts (LangWatch experiment
- * "tokenmaxxer-codegen-chain", 8 page briefs × 4 models):
- *
- *   jimmy             p50=525ms   valid 7/8  quality 0.66
- *   gemini-2.5-flash  p50=9294ms  valid 8/8  quality 0.92
- *   gpt-4.1-mini      p50=20956ms valid 8/8  quality 0.92
- *   inworld-gemma-4   p50=9142ms  valid 8/8  quality 0.92
- *
- * jimmy is 17-40x faster — the only one that makes a page appear as the
- * sentence ends; its quality gap is the product thesis (instant draft,
- * fleet deepens). gemini covers the misses at equal quality to models 2x
- * slower; gemma-4-via-realtime matches gemini but adds WS complexity, so
- * it stays out of the chain.
+ * The chain: the room's selected model first, then smart fallbacks for its
+ * misses. The selected model defaults to ChatJimmy (17-40x faster than the
+ * rest; see scripts/experiment-codegen.ts), but the room can switch to a
+ * smarter one by voice. inworld-gemma is selectable but never an automatic
+ * fallback (a websocket per page); gemini-flash then gpt-4.1-mini cover the
+ * primary's misses.
  */
-export function speedChain(): SpeedModel[] {
-  const chain: SpeedModel[] = [
-    {
-      name: "jimmy",
-      url: config.jimmyProxyUrl,
-      model: "llama3.1-8B",
-      timeoutMs: 15_000,
-    },
-  ];
-  if (config.geminiApiKey) {
-    chain.push({
-      name: "gemini-flash",
-      url: "https://generativelanguage.googleapis.com/v1beta/openai",
-      model: "gemini-2.5-flash",
-      apiKey: config.geminiApiKey,
-      timeoutMs: 25_000,
-      // Thinking costs ~15s on a page; speed is the whole point here.
-      extraBody: { reasoning_effort: "none" },
-    });
+export function speedChain(): PageModel[] {
+  const primary = PAGE_MODELS[settings.pageModel];
+  const fallbackOrder: PageModelId[] = ["gemini-flash", "gpt-4.1-mini"];
+  const chain = [primary];
+  for (const id of fallbackOrder) {
+    const m = PAGE_MODELS[id];
+    if (m.id !== primary.id && m.available()) chain.push(m);
   }
-  if (config.openaiApiKey) {
-    chain.push({
-      name: "gpt-4.1-mini",
-      url: "https://api.openai.com/v1",
-      model: "gpt-4.1-mini",
-      apiKey: config.openaiApiKey,
-      timeoutMs: 30_000,
-    });
-  }
-  return chain;
-}
-
-async function chat(
-  m: SpeedModel,
-  messages: ChatMessage[],
-  timeoutMs: number,
-): Promise<string> {
-  const res = await fetch(`${m.url}/chat/completions`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...(m.apiKey ? { Authorization: `Bearer ${m.apiKey}` } : {}),
-    },
-    body: JSON.stringify({
-      model: m.model,
-      messages,
-      max_tokens: 6000,
-      temperature: 0.2,
-      ...m.extraBody,
-    }),
-    signal: AbortSignal.timeout(timeoutMs),
-  });
-  if (!res.ok) {
-    throw new Error(`${m.name} HTTP ${res.status}: ${(await res.text()).slice(0, 200)}`);
-  }
-  const data = (await res.json()) as {
-    choices: { message: { content: string } }[];
-  };
-  return data.choices[0]?.message?.content ?? "";
+  return chain.filter((m) => m.available());
 }
 
 export interface CodegenResult {
@@ -141,10 +69,7 @@ async function runChain(
   const errors: string[] = [];
 
   for (const m of speedChain()) {
-    const messages: ChatMessage[] = [
-      { role: "system", content: PAGE_SYSTEM_PROMPT },
-      { role: "user", content: userPrompt },
-    ];
+    const messages: ChatMessage[] = [systemMessage(), { role: "user", content: userPrompt }];
     for (let attempt = 0; attempt < 2; attempt++) {
       const remaining = overallDeadlineMs - (Date.now() - t0);
       if (remaining < 2_000) {
@@ -154,25 +79,25 @@ async function runChain(
       }
       attempts++;
       try {
-        const raw = await chat(m, messages, Math.min(m.timeoutMs, remaining));
+        const raw = await m.generate(messages, Math.min(m.timeoutMs, remaining));
         const body = extractJsxBody(raw);
         const code = wrapBody(body);
         const valid = await validatePage(code);
         if (valid.ok) {
           const elapsedMs = Date.now() - t0;
-          log("jimmy", `codegen ok via ${m.name} in ${elapsedMs}ms (attempt ${attempts})`);
-          return { code, model: m.name, elapsedMs, attempts };
+          log("jimmy", `codegen ok via ${m.id} in ${elapsedMs}ms (attempt ${attempts})`);
+          return { code, model: m.id, elapsedMs, attempts };
         }
-        log("jimmy", `${m.name} invalid output: ${valid.error} :: ${body.slice(0, 120)}`);
-        errors.push(`${m.name}: ${valid.error}`);
+        log("jimmy", `${m.id} invalid output: ${valid.error} :: ${body.slice(0, 120)}`);
+        errors.push(`${m.id}: ${valid.error}`);
         messages.push(
           { role: "assistant", content: raw },
           { role: "user", content: retryPrompt(valid.error ?? "unknown") },
         );
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        log("jimmy", `${m.name} failed: ${message}`);
-        errors.push(`${m.name}: ${message}`);
+        log("jimmy", `${m.id} failed: ${message}`);
+        errors.push(`${m.id}: ${message}`);
         break; // transport error — skip retry, next model
       }
     }

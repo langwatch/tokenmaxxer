@@ -109,6 +109,28 @@ export const TOOL_SCHEMAS = [
   },
   {
     type: "function",
+    name: "set_page_model",
+    description:
+      "Switch the model that writes prototype pages. ChatJimmy is the " +
+      "fastest (a page in under a second) but the least smart; the others " +
+      "are slower but sharper. Call when the team asks for a smarter or " +
+      "faster page model, e.g. 'use the smart model for pages'.",
+    parameters: {
+      type: "object",
+      properties: {
+        model: {
+          type: "string",
+          enum: ["jimmy", "gemini-flash", "haiku", "inworld-gemma"],
+          description:
+            "jimmy = fastest; gemini-flash and haiku = smart and fast; " +
+            "inworld-gemma = the same model as the voice.",
+        },
+      },
+      required: ["model"],
+    },
+  },
+  {
+    type: "function",
     name: "open_page",
     description:
       "Navigate the room screen to a page that ALREADY EXISTS on the " +

@@ -1,23 +1,18 @@
 /**
- * Codegen speed-vs-quality experiment: which model should be first in the
- * write_page chain? Compares chatjimmy (~17k tok/s quantized Llama 3.1 8B),
- * gemini-2.5-flash, gpt-4.1-mini, and Inworld's gemma-4 driven through a
- * text-only realtime session (could the voice model do the codegen itself?).
- *
- * Logs latency, validity and judge-scored quality per item per target to
- * LangWatch, and prints the summary the chain order decision is based on.
+ * Codegen speed-vs-quality benchmark across the full page-model registry
+ * (chatjimmy, gemini-flash, haiku, inworld-gemma, gpt-4.1-mini). Logs
+ * latency, validity and judge-scored quality per item per model to
+ * LangWatch, and prints the summary that justifies the default chain order.
  *
  * Run: npx tsx scripts/experiment-codegen.ts
  */
 import "dotenv/config";
 import { LangWatch } from "langwatch";
-import WebSocket from "ws";
-import { PAGE_SYSTEM_PROMPT, wrapBody, writePagePrompt } from "../src/jimmy/prompts.js";
+import { PAGE_MODELS, systemMessage, type PageModelId } from "../src/jimmy/models.js";
+import { wrapBody, writePagePrompt } from "../src/jimmy/prompts.js";
 import { extractJsxBody, validatePage } from "../src/jimmy/validate.js";
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY!;
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY!;
-const INWORLD_API_KEY = process.env.INWORLD_API_KEY!;
 
 // Realistic Max-style write_page briefs — what the voice agent actually
 // produces in meetings (see recordings + QA transcripts).
@@ -32,118 +27,13 @@ const DATASET = [
   { slug: "launch", brief: "A product launch announcement page: big date countdown feel (static), what's new list, testimonial quotes, subscribe call to action." },
 ];
 
-interface GenResult {
-  code: string;
-  raw: string;
-  latencyMs: number;
-}
-
-async function openaiCompatible(
-  url: string,
-  model: string,
-  apiKey: string | undefined,
-  brief: { slug: string; brief: string },
-  extraBody: Record<string, unknown> = {},
-): Promise<GenResult> {
-  const t0 = Date.now();
-  const res = await fetch(`${url}/chat/completions`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
-    },
-    body: JSON.stringify({
-      model,
-      messages: [
-        { role: "system", content: PAGE_SYSTEM_PROMPT },
-        { role: "user", content: writePagePrompt(brief.slug, brief.brief) },
-      ],
-      max_tokens: 6000,
-      temperature: 0.2,
-      ...extraBody,
-    }),
-    signal: AbortSignal.timeout(60_000),
-  });
-  if (!res.ok) throw new Error(`HTTP ${res.status}: ${(await res.text()).slice(0, 150)}`);
-  const data = (await res.json()) as { choices: { message: { content: string } }[] };
-  const raw = data.choices[0]?.message?.content ?? "";
-  return { raw, code: wrapBody(extractJsxBody(raw)), latencyMs: Date.now() - t0 };
-}
-
-/** gemma-4 through a text-only Inworld realtime session. */
-async function inworldGemma(brief: { slug: string; brief: string }): Promise<GenResult> {
-  const t0 = Date.now();
-  return new Promise<GenResult>((resolve, reject) => {
-    const ws = new WebSocket(
-      `wss://api.inworld.ai/api/v1/realtime/session?key=exp-${Date.now()}&protocol=realtime`,
-      { headers: { Authorization: `Basic ${INWORLD_API_KEY}` } },
-    );
-    const send = (obj: unknown) => ws.send(JSON.stringify(obj));
-    let text = "";
-    const timer = setTimeout(() => {
-      ws.close();
-      reject(new Error("inworld codegen timeout"));
-    }, 60_000);
-    ws.on("error", (err) => {
-      clearTimeout(timer);
-      reject(err);
-    });
-    ws.on("message", (rawMsg) => {
-      const evt = JSON.parse(rawMsg.toString());
-      if (evt.type === "session.created") {
-        send({
-          type: "session.update",
-          session: {
-            type: "realtime",
-            model: "inworld/models/gemma-4-26b-a4b-it",
-            instructions: PAGE_SYSTEM_PROMPT,
-            output_modalities: ["text"],
-          },
-        });
-      }
-      if (evt.type === "session.updated") {
-        send({
-          type: "conversation.item.create",
-          item: {
-            type: "message",
-            role: "user",
-            content: [
-              { type: "input_text", text: writePagePrompt(brief.slug, brief.brief) },
-            ],
-          },
-        });
-        send({ type: "response.create" });
-      }
-      if (evt.type === "response.output_text.delta") text += evt.delta ?? "";
-      if (evt.type === "response.output_text.done" && evt.text) text = String(evt.text);
-      if (evt.type === "response.done") {
-        clearTimeout(timer);
-        ws.close();
-        resolve({ raw: text, code: wrapBody(extractJsxBody(text)), latencyMs: Date.now() - t0 });
-      }
-      if (evt.type === "error") {
-        clearTimeout(timer);
-        ws.close();
-        reject(new Error(String(evt.error?.message ?? "inworld error")));
-      }
-    });
-  });
-}
-
-const TARGETS: Record<string, (b: { slug: string; brief: string }) => Promise<GenResult>> = {
-  jimmy: (b) => openaiCompatible("http://localhost:4100/v1", "llama3.1-8B", undefined, b),
-  "gemini-2.5-flash": (b) =>
-    openaiCompatible(
-      "https://generativelanguage.googleapis.com/v1beta/openai",
-      "gemini-2.5-flash",
-      GEMINI_API_KEY,
-      b,
-      { reasoning_effort: "none" },
-    ),
-  "gpt-4.1-mini": (b) =>
-    openaiCompatible("https://api.openai.com/v1", "gpt-4.1-mini", OPENAI_API_KEY, b),
-  "inworld-gemma-4": inworldGemma,
-};
+const MODELS: PageModelId[] = [
+  "jimmy",
+  "gemini-flash",
+  "haiku",
+  "inworld-gemma",
+  "gpt-4.1-mini",
+];
 
 /** 0-1 quality judge: fidelity to brief, richness, aesthetic discipline. */
 async function judgeQuality(brief: string, code: string): Promise<number> {
@@ -183,48 +73,45 @@ const evaluation = await langwatch.experiments.init("tokenmaxxer-codegen-chain")
 const summary: Record<string, { latencies: number[]; valid: number; total: number; quality: number[] }> = {};
 
 await evaluation.run(DATASET, async ({ item, index }) => {
-  for (const [target, gen] of Object.entries(TARGETS)) {
-    summary[target] ??= { latencies: [], valid: 0, total: 0, quality: [] };
-    const s = summary[target];
+  for (const id of MODELS) {
+    const model = PAGE_MODELS[id];
+    if (!model.available()) continue;
+    summary[id] ??= { latencies: [], valid: 0, total: 0, quality: [] };
+    const s = summary[id];
     s.total++;
+    const t0 = Date.now();
     try {
-      const result = await gen(item);
-      const valid = (await validatePage(result.code)).ok;
-      if (valid) s.valid++;
-      s.latencies.push(result.latencyMs);
-      evaluation.log(`${target}/latency_ms`, {
-        index,
-        score: result.latencyMs,
-        data: { slug: item.slug },
-      });
-      evaluation.log(`${target}/valid`, { index, passed: valid });
-      if (valid) {
-        const quality = await judgeQuality(item.brief, result.code);
-        s.quality.push(quality);
-        evaluation.log(`${target}/quality`, {
-          index,
-          score: quality,
-          data: { code: result.code.slice(0, 2000) },
-        });
-      }
-      console.log(
-        `${item.slug} × ${target}: ${result.latencyMs}ms valid=${valid}` +
-          (s.quality.length ? ` q=${s.quality[s.quality.length - 1]?.toFixed(2)}` : ""),
+      const raw = await model.generate(
+        [systemMessage(), { role: "user", content: writePagePrompt(item.slug, item.brief) }],
+        model.timeoutMs * 2,
       );
+      const latencyMs = Date.now() - t0;
+      const code = wrapBody(extractJsxBody(raw));
+      const valid = (await validatePage(code)).ok;
+      if (valid) s.valid++;
+      s.latencies.push(latencyMs);
+      evaluation.log(`${id}/latency_ms`, { index, score: latencyMs, data: { slug: item.slug } });
+      evaluation.log(`${id}/valid`, { index, passed: valid });
+      if (valid) {
+        const quality = await judgeQuality(item.brief, code);
+        s.quality.push(quality);
+        evaluation.log(`${id}/quality`, { index, score: quality, data: { code: code.slice(0, 2000) } });
+      }
+      console.log(`${item.slug} × ${id}: ${latencyMs}ms valid=${valid}`);
     } catch (err) {
-      console.log(`${item.slug} × ${target}: FAILED ${(err as Error).message}`);
-      evaluation.log(`${target}/valid`, { index, passed: false });
+      console.log(`${item.slug} × ${id}: FAILED ${(err as Error).message}`);
+      evaluation.log(`${id}/valid`, { index, passed: false });
     }
   }
 });
 
 console.log("\n=== SUMMARY (the chain-order decision) ===");
-for (const [target, s] of Object.entries(summary)) {
-  const avg = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : NaN);
-  const p50 = (xs: number[]) =>
-    xs.length ? [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)] : NaN;
+const avg = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : NaN);
+const p50 = (xs: number[]) =>
+  xs.length ? [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)] : NaN;
+for (const [id, s] of Object.entries(summary)) {
   console.log(
-    `${target.padEnd(18)} p50=${String(p50(s.latencies)).padStart(6)}ms ` +
+    `${id.padEnd(16)} p50=${String(p50(s.latencies)).padStart(6)}ms ` +
       `valid=${s.valid}/${s.total} quality=${avg(s.quality).toFixed(2)}`,
   );
 }

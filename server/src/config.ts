@@ -30,6 +30,7 @@ export const config = {
   agentModel: process.env.TOKENMAXXER_AGENT_MODEL ?? "sonnet",
 
   jimmyProxyUrl: process.env.JIMMY_PROXY_URL ?? "http://localhost:4100/v1",
+  defaultPageModel: process.env.TOKENMAXXER_PAGE_MODEL ?? "jimmy",
   geminiApiKey: process.env.GEMINI_API_KEY ?? "",
   openaiApiKey: process.env.OPENAI_API_KEY ?? "",
 

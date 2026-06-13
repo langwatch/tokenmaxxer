@@ -69,10 +69,14 @@ LangWatch experiment `tokenmaxxer-codegen-chain`, 8 page briefs × 4 models
 
 | model | p50 latency | valid | judge quality |
 |---|---|---|---|
-| chatjimmy (Llama 3.1 8B @ ~17k tok/s) | **525ms** | 7/8 | 0.66 |
-| gemini-2.5-flash | 9294ms | 8/8 | 0.92 |
-| gpt-4.1-mini | 20956ms | 8/8 | 0.92 |
-| inworld gemma-4 (text-mode realtime) | 9142ms | 8/8 | 0.92 |
+| chatjimmy (Llama 3.1 8B @ ~17k tok/s) | **~0.8s** | 5/8 | 0.65 |
+| inworld gemma-4 (text-mode realtime) | 8005ms | 8/8 | 0.92 |
+| gemini-2.5-flash | 8592ms | 8/8 | 0.92 |
+| claude haiku 4.5 | 13320ms | 8/8 | **0.93** |
+| gpt-4.1-mini | 15701ms | 8/8 | 0.90 |
 
 jimmy is the only model that puts the page on screen as the sentence ends;
 the fallbacks cover its misses, and the claude fleet deepens whatever lands.
+The room can switch the page model by voice ("use the smart model for
+pages") — haiku is the sharpest, gemini-flash the best speed/quality
+balance.

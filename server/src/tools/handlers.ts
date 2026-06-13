@@ -7,8 +7,10 @@ import {
   generatePageCode,
   writePageRequest,
 } from "../jimmy/client.js";
+import { PAGE_MODELS, type PageModelId } from "../jimmy/models.js";
 import { log } from "../log.js";
 import { fleet } from "../orchestrator/fleet.js";
+import { settings } from "../settings.js";
 
 /** The room's single prototype window — re-pointed as pages change. */
 const PROTOTYPE_WINDOW_KEY = "prototype";
@@ -57,6 +59,35 @@ const handlers: Record<string, Handler> = {
 
   async check_progress() {
     return { output: { report: fleet.progressReport() } };
+  },
+
+  async set_page_model(args) {
+    const id = String(args.model ?? "") as PageModelId;
+    const model = PAGE_MODELS[id];
+    if (!model) {
+      return {
+        output: {
+          status: "unknown_model",
+          note: `No page model "${id}". Choose one of: ${Object.keys(PAGE_MODELS).join(", ")}.`,
+        },
+      };
+    }
+    if (!model.available()) {
+      return {
+        output: {
+          status: "unavailable",
+          note: `${model.label} is not configured (missing API key).`,
+        },
+      };
+    }
+    settings.setPageModel(id);
+    return {
+      output: {
+        status: "switched",
+        model: id,
+        note: `Pages now use ${model.label}.`,
+      },
+    };
   },
 
   async write_page(args) {

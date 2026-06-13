@@ -8,6 +8,7 @@ import { log } from "../log.js";
 import { fleet } from "../orchestrator/fleet.js";
 import { tracer } from "../observability.js";
 import { MAX_GREETING } from "../persona.js";
+import { settings } from "../settings.js";
 import { transcribePcm } from "./stt-shim.js";
 import { executeTool } from "../tools/handlers.js";
 import { buildSessionConfig, type ClientSessionRequest } from "./session-config.js";
@@ -419,11 +420,17 @@ export function startGateway(): http.Server {
     clients.add(ws);
     log("gateway", `client connected (${clients.size} total)`);
     new GatewaySession(ws);
-    // Late joiners see the current fleet immediately.
+    // Late joiners see the current fleet and settings immediately.
     ws.send(JSON.stringify({ type: "tokenmaxxer.fleet", agents: fleet.list() }));
+    ws.send(
+      JSON.stringify({ type: "tokenmaxxer.settings", pageModel: settings.pageModel }),
+    );
   });
 
   fleet.on("fleet", (agents) => broadcast({ type: "tokenmaxxer.fleet", agents }));
+  settings.on("change", ({ pageModel }) =>
+    broadcast({ type: "tokenmaxxer.settings", pageModel }),
+  );
 
   server.listen(config.port, () => {
     log("gateway", `listening on http://localhost:${config.port} (ws: /realtime)`);
