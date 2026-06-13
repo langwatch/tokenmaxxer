@@ -1,0 +1,14 @@
+{
+  "name": "@tokenmaxxer/hud",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Floating always-on-top listening HUD (Electron shell around the console)",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "typecheck": "node --check main.js"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0"
+  }
+}

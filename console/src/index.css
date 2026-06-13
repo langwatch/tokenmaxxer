@@ -1,0 +1,17 @@
+@import "tailwindcss";
+
+@keyframes tokenmaxxer-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.6; transform: scale(1.15); }
+}
+.talking {
+  animation: tokenmaxxer-pulse 0.9s ease-in-out infinite;
+}
+
+/* HUD overlay: transparent page so only the glass bar shows in the
+   frameless Electron window. */
+html.hud,
+html.hud body,
+html.hud #root {
+  background: transparent !important;
+}

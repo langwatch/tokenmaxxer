@@ -1,0 +1,58 @@
+import { config } from "../config.js";
+import { MAX_INSTRUCTIONS } from "../persona.js";
+import { TOOL_SCHEMAS } from "../tools/schemas.js";
+
+/**
+ * The gateway owns the session: model, persona, tools, voice and STT are
+ * forced server-side. Clients may only choose how turns are detected —
+ * the console wants semantic VAD, scenario tests drive manual turns with
+ * `turn_detection: null`.
+ */
+
+// Eagerness low: meeting speech comes in complete sentences; medium splits
+// one request into 2-3 turns, each re-triggering tools and polluting the
+// context (observed in browser QA — three write_page calls for one ask).
+const DEFAULT_TURN_DETECTION = {
+  type: "semantic_vad",
+  eagerness: "low",
+  create_response: true,
+  interrupt_response: true,
+};
+
+export interface ClientSessionRequest {
+  audio?: {
+    input?: { turn_detection?: unknown };
+  };
+  [key: string]: unknown;
+}
+
+export function buildSessionConfig(
+  client: ClientSessionRequest | null = null,
+  modelOverride?: string,
+): Record<string, unknown> {
+  const turnDetection =
+    client?.audio?.input && "turn_detection" in client.audio.input
+      ? client.audio.input.turn_detection
+      : DEFAULT_TURN_DETECTION;
+
+  return {
+    type: "realtime",
+    model: modelOverride ?? config.inworldModel,
+    instructions: MAX_INSTRUCTIONS,
+    output_modalities: ["audio"],
+    // Tool routing must be stable: the same sentence has to pick the same tool
+    // every time, or the demo is a coin flip. gemma-4 at its default warmth
+    // routed the same utterance to different tools across runs; 0 makes the
+    // pick deterministic. Max's spoken acks are short, so they don't go robotic.
+    temperature: 0,
+    tools: TOOL_SCHEMAS,
+    audio: {
+      input: {
+        transcription: { model: "assemblyai/u3-rt-pro" },
+        turn_detection: turnDetection,
+      },
+      output: { model: "inworld-tts-2", voice: config.inworldVoice },
+    },
+    providerData: { stt: { voice_profile: false } },
+  };
+}
