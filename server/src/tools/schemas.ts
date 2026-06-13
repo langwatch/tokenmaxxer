@@ -1,11 +1,12 @@
 /**
  * Tool definitions sent to the Inworld session. OpenAI Realtime "function"
  * format. Descriptions are written to steer gemma-4's trigger behavior — they
- * carry as much weight as the persona, so they are blunt and example-led.
+ * carry as much weight as the persona.
  *
- * gemma-4 is a small model that grabs one tool as a catch-all when it is
- * unsure, so every description both CLAIMS its own phrasings AND disclaims the
- * others' — open_url in particular is hard-gated to "show an existing thing".
+ * gemma-4 is a small model: it matches TRIGGER WORDS and EXAMPLES far better
+ * than abstract rules, and it turns whichever tool's description is "loudest"
+ * into a catch-all. So each tool here gets balanced, example-led triggers plus
+ * one short line drawing the boundary against the tool it's most confused with.
  */
 
 export const TOOL_SCHEMAS = [
@@ -13,18 +14,17 @@ export const TOOL_SCHEMAS = [
     type: "function",
     name: "spawn_room",
     description:
-      "DO work: spin up a ROOM of Claude Code agents that land in one shared " +
-      "chat channel and self-organize. Use for anything that MAKES or CHANGES " +
-      "something — implement a feature, redesign a page, build dark mode, fix " +
-      "a bug, refactor, or research/investigate. Fire the MOMENT work is " +
-      "mentioned, even loosely: 'get five agents on dark mode', 'spin up a " +
-      "room to fix the login', 'throw a team at redesigning the pricing " +
-      "page', 'someone should look into why the dashboard is slow', 'have " +
-      "some agents research X' → spawn_room. Never ask permission, never wait " +
-      "for consensus. If a room for this topic already exists, this passes " +
-      "the new direction along instead of forking it. NOT open_url — if they " +
-      "want something built, changed, or fixed, it is a ROOM, not a browser " +
-      "tab.",
+      "DO or BUILD real work as a room of agents who self-organize in a " +
+      "channel. Trigger words: build, make, implement, add (a feature), fix, " +
+      "redesign, refactor, research, investigate, look into, 'get N agents " +
+      "on …', 'spin up a room …', 'throw a team at …'. Examples: 'get five " +
+      "agents on dark mode', 'spin up a room to fix the login', 'throw a " +
+      "team at redesigning the pricing page', 'research the cat-sitter " +
+      "market', 'someone look into why the dashboard is slow'. Fire the " +
+      "moment such work is mentioned — never ask permission. If a room for " +
+      "this topic already exists, this passes the new direction along. " +
+      "Boundary: if they only want to LOOK AT something that already exists, " +
+      "that is open_url, not spawn_room.",
     parameters: {
       type: "object",
       properties: {
@@ -60,70 +60,18 @@ export const TOOL_SCHEMAS = [
   },
   {
     type: "function",
-    name: "message_room",
-    description:
-      "STEER a room that is ALREADY running: pass a note, correction, or " +
-      "extra instruction to its agents without launching anyone new. 'Tell " +
-      "the dark mode room to keep the logo readable', 'remind the login room " +
-      "to write tests', 'let them know to match the brand colors' → " +
-      "message_room. The agents see it in their channel and react. NOT " +
-      "open_url and NOT spawn_room — nobody new is launched and nothing " +
-      "opens on the screen.",
-    parameters: {
-      type: "object",
-      properties: {
-        topic: {
-          type: "string",
-          description: "The room's workstream label, e.g. 'dark mode'.",
-        },
-        message: {
-          type: "string",
-          description: "The note to broadcast into the room's channel.",
-        },
-      },
-      required: ["topic", "message"],
-    },
-  },
-  {
-    type: "function",
-    name: "add_agents",
-    description:
-      "Add MORE agents to a room already in flight when the team wants more " +
-      "horsepower on it. 'Throw two more agents at the dark mode room', " +
-      "'double the team on the login fix', 'add three more hands to it' → " +
-      "add_agents. NOT open_url — the new agents join the existing channel " +
-      "and nothing opens on the screen.",
-    parameters: {
-      type: "object",
-      properties: {
-        topic: {
-          type: "string",
-          description: "The room's workstream label, e.g. 'dark mode'.",
-        },
-        count: {
-          type: "number",
-          description: "How many agents to add. Omit for one.",
-        },
-      },
-      required: ["topic"],
-    },
-  },
-  {
-    type: "function",
     name: "open_url",
     description:
-      "SHOW an already-existing thing on the room screen: open a real " +
-      "browser window at a website, a page, a GitHub issue or PR, or a " +
-      "dashboard. This is a read-only 'put it on the screen' action. ONLY " +
-      "fire it when the team asks to SEE / SHOW / OPEN / PULL UP / BRING UP " +
-      "a specific thing: 'pull up the website', 'open issue 1234 on " +
-      "langwatch', 'show me the repo', 'put the live site on the screen'. " +
-      "DO NOT use open_url to build or change anything (that is spawn_room), " +
-      "to steer a running room (message_room / add_agents), or to report " +
-      "status (check_progress) — if you are unsure, it is almost never " +
-      "open_url. For the live website pass url 'the website' — do NOT guess " +
-      "a port; for a GitHub issue build https://github.com/langwatch/" +
-      "langwatch/issues/<n>.",
+      "SHOW an already-existing thing on the room screen by opening a " +
+      "browser window. Trigger words: 'pull up', 'show me', 'open' (an " +
+      "issue/PR/site/link), 'put … on the screen', 'bring up', \"let's see\". " +
+      "Examples: 'pull up the new website', 'open issue 1234 on langwatch', " +
+      "'show me the repo', 'put the live site on the screen'. This only " +
+      "DISPLAYS something that already exists — it never builds, changes, or " +
+      "fixes anything (that's spawn_room) and is never a status answer " +
+      "(that's check_progress). For the live website pass url 'the website' " +
+      "(the room resolves it — do NOT guess a port); for a GitHub issue " +
+      "build https://github.com/langwatch/langwatch/issues/<n>.",
     parameters: {
       type: "object",
       properties: {
@@ -144,14 +92,67 @@ export const TOOL_SCHEMAS = [
   },
   {
     type: "function",
+    name: "message_room",
+    description:
+      "Send a NOTE or INSTRUCTION into a room that is ALREADY running — you " +
+      "are telling its agents something. Trigger words: tell, remind, let " +
+      "them know, have them, ask them to. Examples: 'tell the dark mode room " +
+      "to keep the logo readable', 'remind the login room to write tests', " +
+      "'let them know to match the brand colors'. Boundary: this is giving a " +
+      "directive TO a room — it is NOT asking how they are doing (that's " +
+      "check_progress) and it opens nothing.",
+    parameters: {
+      type: "object",
+      properties: {
+        topic: {
+          type: "string",
+          description: "The room's workstream label, e.g. 'dark mode'.",
+        },
+        message: {
+          type: "string",
+          description: "The note to broadcast into the room's channel.",
+        },
+      },
+      required: ["topic", "message"],
+    },
+  },
+  {
+    type: "function",
+    name: "add_agents",
+    description:
+      "Put MORE agents on a room already running. Trigger words: 'throw N " +
+      "more agents at …', 'add more hands', 'double the team', 'more people " +
+      "on …'. Examples: 'throw two more agents at the dark mode room', " +
+      "'double the team on the login fix'. Boundary: only for adding muscle " +
+      "to an existing room — not for opening anything (open_url) or starting " +
+      "new work (spawn_room).",
+    parameters: {
+      type: "object",
+      properties: {
+        topic: {
+          type: "string",
+          description: "The room's workstream label, e.g. 'dark mode'.",
+        },
+        count: {
+          type: "number",
+          description: "How many agents to add. Omit for one.",
+        },
+      },
+      required: ["topic"],
+    },
+  },
+  {
+    type: "function",
     name: "check_progress",
     description:
-      "Report STATUS of the rooms: how many agents and what they are saying " +
-      "in their channels. Fire whenever anyone asks how it's going or what's " +
-      "running: 'how's it going in there?', 'what's everyone working on?', " +
-      "'give me a status', 'any update on the rooms?', 'where are we?' → " +
-      "check_progress. Then summarize ONLY what's new in two or three spoken " +
-      "sentences. NOT open_url — a status question never opens a browser.",
+      "ASK how the rooms are doing — you are answering a question about " +
+      "status. Trigger words: 'how's it going', 'what's everyone working " +
+      "on', 'status', 'any update', 'where are we', 'how are the rooms'. " +
+      "Examples: 'how's it going in there?', 'what's everyone working on " +
+      "right now?', 'give me a status'. Then summarize only what's new in " +
+      "two or three spoken sentences. Boundary: a status QUESTION never " +
+      "opens a browser (open_url) and is never a note to the room " +
+      "(message_room).",
     // A required param on purpose: schemas with empty `properties` make
     // gemma-4 emit nameless function calls on the wire.
     parameters: {

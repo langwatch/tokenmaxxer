@@ -195,6 +195,15 @@ export class RoomManager extends EventEmitter {
   private async launchAgent(room: Room, name: string, teammates: string[]): Promise<void> {
     const agent = room.agents.get(name);
     if (!agent) return;
+    // add_agents reaches launchAgent directly (not just through launchRoom), so
+    // the dry-run short-circuit lives here too — otherwise headless tests of
+    // the add-to-a-live-room path would shell out and spawn real claude agents.
+    if (config.fleetDryRun) {
+      agent.status = "working";
+      agent.lastActivity = "dry-run (no agent launched)";
+      this.emitFleet();
+      return;
+    }
     try {
       const result = await kanbanLaunch(agent.slug, room.workspace, config.agentModel);
       agent.tmuxName = result.tmuxName;
