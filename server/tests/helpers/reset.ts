@@ -66,6 +66,15 @@ export function deleteRoomChannels(): string[] {
   for (const name of names) {
     if (!KEEP_CHANNELS.includes(name)) {
       run("kanban", ["channel", "delete", name, "--json"]);
+      // `channel delete` keeps the append-only log, so a re-created channel of
+      // the same name would replay stale history — drop it for a clean slate.
+      try {
+        fs.rmSync(path.join(os.homedir(), ".kanban-code", "channels", `${name}.jsonl`), {
+          force: true,
+        });
+      } catch {
+        // best effort
+      }
       deleted.push(name);
     }
   }
