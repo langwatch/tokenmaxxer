@@ -119,8 +119,20 @@ const evaluation = await langwatch.experiments.init("tokenmaxxer-delegation");
 let correct = 0;
 const confusion: Record<string, Record<string, number>> = {};
 
+// evaluation.run fires every case's callback in PARALLEL, which races the
+// per-session utterance capture against the shared gateway and reports a
+// concurrency artifact, not the real routing number. Gate the gateway hits
+// through a one-at-a-time mutex so each turn is taken alone — exactly how a
+// human speaks to the room — while LangWatch still manages the run.
+let gate: Promise<unknown> = Promise.resolve();
+function serial<T>(fn: () => Promise<T>): Promise<T> {
+  const run = gate.then(fn, fn);
+  gate = run.then(() => undefined, () => undefined);
+  return run;
+}
+
 await evaluation.run(DATASET, async ({ item, index }) => {
-  const got = await toolFor(item.utterance);
+  const got = await serial(() => toolFor(item.utterance));
   const ok = got === item.expected;
   if (ok) correct++;
   const row = (confusion[item.expected] ??= {});
