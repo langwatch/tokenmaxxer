@@ -15,9 +15,10 @@
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
-import scenario, { AgentRole, voice } from "@langwatch/scenario";
+import scenario from "@langwatch/scenario";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { startTestServer, type TestServer } from "../helpers/gateway.js";
+import { maxAgent } from "./helpers/max-agent.js";
 import { saveRecording } from "./helpers/save-recording.js";
 
 const PLAYGROUND_PAGES = path.resolve(
@@ -70,13 +71,10 @@ afterAll(() => {
 });
 
 function maxUnderTest() {
-  // voice.openAIRealtimeAgent — the published default export's d.ts misses
-  // the voice factories (runtime/type drift); the voice namespace has them.
-  return voice.openAIRealtimeAgent({
-    url: server.url,
-    apiKey: "handled-by-gateway",
-    role: AgentRole.AGENT,
-  });
+  // The gateway IS the agent (OpenAI Realtime wire). maxAgent wraps the
+  // adapter to attach Max's spoken transcript to the audio message, so the
+  // LangWatch Simulations UI shows the conversation instead of blank audio.
+  return maxAgent(server.url);
 }
 
 describe.sequential("Max — meeting room voice agent", () => {
@@ -121,6 +119,16 @@ describe.sequential("Max — meeting room voice agent", () => {
     const speakers = new Set(result.audio!.segments.map((s) => s.speaker));
     expect(speakers.has("user"), "no user audio in recording").toBe(true);
     expect(speakers.has("agent"), "no agent audio in recording").toBe(true);
+
+    // Regression: Max's spoken turns carry a transcript text part alongside
+    // the audio, so the LangWatch Simulations UI renders the conversation
+    // instead of blank audio players.
+    const agentAudioWithText = result.messages.some((m) => {
+      if (m.role !== "assistant" || !Array.isArray(m.content)) return false;
+      const types = m.content.map((p) => (p as { type?: string }).type);
+      return types.includes("file") && types.includes("text");
+    });
+    expect(agentAudioWithText, "agent audio message is missing its transcript text part").toBe(true);
   }, 240_000);
 
   it("answers progress questions from fleet state", async () => {
