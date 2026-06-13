@@ -21,6 +21,8 @@ export async function startTestServer(
     env: {
       ...process.env,
       TOKENMAXXER_PORT: String(port),
+      // Spawned gateways stay headless — no windows pop during tests.
+      TOKENMAXXER_DESKTOP: "0",
       ...env,
     },
     stdio: ["ignore", "pipe", "pipe"],

@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { config } from "../config.js";
+import { desktop, pageSlot } from "../desktop/index.js";
 import {
   editPageRequest,
   generatePageCode,
@@ -8,6 +9,19 @@ import {
 } from "../jimmy/client.js";
 import { log } from "../log.js";
 import { fleet } from "../orchestrator/fleet.js";
+
+/** The room's single prototype window — re-pointed as pages change. */
+const PROTOTYPE_WINDOW_KEY = "prototype";
+
+/** Pop (or re-point) the real prototype browser window to a page. */
+function showPageOnDesktop(slug: string): void {
+  const url = `${config.playgroundUrl}/${slug}`;
+  void desktop().openBrowser({
+    url,
+    key: PROTOTYPE_WINDOW_KEY,
+    slot: pageSlot(),
+  });
+}
 
 export interface ToolOutcome {
   output: Record<string, unknown>;
@@ -63,6 +77,7 @@ const handlers: Record<string, Handler> = {
     fs.mkdirSync(path.dirname(pageFile(slug)), { recursive: true });
     fs.writeFileSync(pageFile(slug), result.code);
     log("tools", `write_page /${slug} via ${result.model} in ${result.elapsedMs}ms`);
+    showPageOnDesktop(slug);
     return {
       output: {
         status: "live",
@@ -94,6 +109,7 @@ const handlers: Record<string, Handler> = {
     );
     fs.writeFileSync(file, result.code);
     log("tools", `edit_page /${slug} via ${result.model} in ${result.elapsedMs}ms`);
+    showPageOnDesktop(slug);
     return {
       output: {
         status: "live",
@@ -120,6 +136,7 @@ const handlers: Record<string, Handler> = {
         },
       };
     }
+    showPageOnDesktop(slug);
     return {
       output: { status: "shown", page: `/${slug}` },
       navigate: `/${slug}`,

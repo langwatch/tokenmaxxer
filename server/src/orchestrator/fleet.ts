@@ -2,6 +2,7 @@ import { EventEmitter } from "node:events";
 import fs from "node:fs";
 import path from "node:path";
 import { config } from "../config.js";
+import { desktop, prSlot, terminalSlotForIndex } from "../desktop/index.js";
 import type { FleetAgentView } from "../events.js";
 import { log } from "../log.js";
 import { decideDispatch } from "./brain.js";
@@ -43,6 +44,10 @@ function workerPromptWrapper(workerPrompt: string, workspace: string): string {
 export class FleetManager extends EventEmitter {
   private agents = new Map<string, FleetAgent>();
   private watcher: NodeJS.Timeout | null = null;
+  /** Assigns each visible agent terminal a fan-out quadrant. */
+  private terminalCount = 0;
+  /** Agents whose completion has already been surfaced proactively. */
+  private announcedDone = new Set<string>();
 
   list(): FleetAgentView[] {
     return [...this.agents.values()].map(({ tmuxName: _t, ...view }) => view);
@@ -147,6 +152,13 @@ export class FleetManager extends EventEmitter {
 
     const result = await kanbanLaunch(slug, workspace, config.agentModel);
     agent.tmuxName = result.tmuxName;
+    // Pop a real terminal so the room watches the agent work live.
+    void desktop().openTerminal({
+      command: `tmux attach -t ${result.tmuxName}`,
+      title: slug,
+      key: slug,
+      slot: terminalSlotForIndex(this.terminalCount++),
+    });
     // claude needs a beat after launch before the prompt lands reliably
     await new Promise((r) => setTimeout(r, 6000));
     await kanbanSend(
@@ -210,6 +222,7 @@ export class FleetManager extends EventEmitter {
           agent.status = newStatus;
           changed = true;
         }
+        if (status?.startsWith("DONE:")) this.announceDone(agent, status);
       } catch {
         if (agent.status !== "gone") {
           agent.status = "gone";
@@ -218,6 +231,32 @@ export class FleetManager extends EventEmitter {
       }
     }
     if (changed) this.emitFleet();
+  }
+
+  /**
+   * Proactive completion — fired once per agent, even in silence. Posts a
+   * desktop notification and, when the work produced a pull request, pops it
+   * open on the room screen.
+   */
+  private announceDone(agent: FleetAgent, status: string): void {
+    if (this.announcedDone.has(agent.slug)) return;
+    this.announcedDone.add(agent.slug);
+    const summary = status.replace(/^DONE:\s*/, "").slice(0, 180);
+    const prUrl = status.match(/https?:\/\/github\.com\/\S+\/pull\/\d+/)?.[0];
+    log("fleet", `${agent.slug} DONE — ${summary}`);
+    void desktop().notify({
+      title: `✅ ${agent.topic}`,
+      message: summary,
+      openUrl: prUrl,
+    });
+    if (prUrl) {
+      void desktop().openBrowser({
+        url: prUrl,
+        key: `pr-${agent.slug}`,
+        slot: prSlot(),
+      });
+    }
+    this.emit("done", { slug: agent.slug, summary, prUrl });
   }
 
   private emitFleet(): void {
