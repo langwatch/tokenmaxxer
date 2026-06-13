@@ -246,22 +246,25 @@ windows:
 
   async focusChannel(channel: string): Promise<void> {
     try {
-      // Deep-link the board to this channel: brings KanbanCode forward and
-      // selects the channel (handled by the app's kanbancode:// URL handler).
-      await new Promise<void>((resolve) => {
-        const child = spawn("kanban", ["channel", "open", channel], {
-          stdio: "ignore",
-        });
-        child.on("exit", () => resolve());
-        child.on("error", () => resolve());
-      });
+      const region = regionForSlot("top-left", await this.screen());
+      // Bring the ALREADY-RUNNING KanbanCode forward via accessibility, NOT the
+      // kanbancode:// deep link. The deep link can relaunch a stale registered
+      // build and trip KanbanCode's quit-protection dialog mid-demo; activating
+      // the live process by name never launches anything, so no dialog. (Channel
+      // auto-select rode on the deep link, so we drop it — the board still comes
+      // forward on the room; a non-relaunching select is a KanbanCode-side job.)
+      await osa(
+        `tell application "System Events"
+           if exists (process "${KANBAN_APP_PROCESS}") then
+             set frontmost of process "${KANBAN_APP_PROCESS}" to true
+           end if
+         end tell`,
+      ).catch(() => {});
       // Pin the board to the top-left quarter so it's the room's focal point
       // while terminals fan out below and the screen sits top-right.
-      await delay(400);
-      await this.positionFrontWindow(
-        KANBAN_APP_PROCESS,
-        regionForSlot("top-left", await this.screen()),
-      );
+      await delay(300);
+      await this.positionFrontWindow(KANBAN_APP_PROCESS, region);
+      log("desktop", `focused board top-left (room #${channel})`);
     } catch (err) {
       log("desktop", `focusChannel failed: ${(err as Error).message}`);
     }
