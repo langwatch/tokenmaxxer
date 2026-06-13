@@ -35,10 +35,34 @@ export async function ensureJimmyProxy(): Promise<void> {
     await new Promise((r) => setTimeout(r, 300));
     if (await healthy()) {
       log("jimmy", "proxy is up");
+      void warmup();
       return;
     }
   }
   log("jimmy", "proxy did not come up — speed chain will use fallbacks");
+}
+
+/**
+ * Fire a tiny completion so ChatJimmy's backend is warm before the first
+ * real page request — a cold first call can take 20s+ and lose the race to
+ * the fallback model.
+ */
+async function warmup(): Promise<void> {
+  try {
+    await fetch(`${config.jimmyProxyUrl}/chat/completions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "llama3.1-8B",
+        messages: [{ role: "user", content: "hi" }],
+        max_tokens: 1,
+      }),
+      signal: AbortSignal.timeout(30_000),
+    });
+    log("jimmy", "proxy warmed");
+  } catch {
+    // best effort — the chain still works cold, just slower on the first page
+  }
 }
 
 async function healthy(): Promise<boolean> {
