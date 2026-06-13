@@ -22,7 +22,7 @@ const handlers: Record<string, Handler> = {
     const agents =
       typeof args.agents === "number" ? args.agents : Number(args.agents) || undefined;
     const project = args.project ? String(args.project) : undefined;
-    const note = rooms.spawnRoom({ mission, topic, agents, project });
+    const note = await rooms.spawnRoom({ mission, topic, agents, project });
     return { output: { status: "spawning", note } };
   },
 
@@ -39,7 +39,7 @@ const handlers: Record<string, Handler> = {
     if (!topic) throw new Error("add_agents needs a topic");
     const count =
       typeof args.count === "number" ? args.count : Number(args.count) || undefined;
-    const note = rooms.addAgents({ topic, count });
+    const note = await rooms.addAgents({ topic, count });
     return { output: { status: "added", note } };
   },
 

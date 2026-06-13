@@ -82,6 +82,22 @@ export async function kanbanKill(tmuxName: string): Promise<void> {
   }
 }
 
+/**
+ * Names of every live tmux session. The orchestrator skips any agent name whose
+ * session is still alive when handing out names, so a fresh room can never
+ * derive the same deterministic sessionId as a running agent and resume it
+ * under a new mission. This also covers survivors of a gateway restart, which
+ * clears the in-memory name set but leaves the tmux sessions running.
+ */
+export async function listTmuxSessions(): Promise<Set<string>> {
+  try {
+    const { stdout } = await exec("tmux", ["ls", "-F", "#{session_name}"]);
+    return new Set(stdout.split("\n").map((s) => s.trim()).filter(Boolean));
+  } catch {
+    return new Set(); // no tmux server / no sessions
+  }
+}
+
 /** The handle Max posts under when speaking into a room channel. */
 export const MAX_HANDLE = "max";
 

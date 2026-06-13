@@ -15,6 +15,7 @@ import {
   kanbanKill,
   kanbanLaunch,
   kanbanSend,
+  listTmuxSessions,
   waitForClaudeReady,
   MAX_HANDLE,
 } from "./kanban.js";
@@ -54,7 +55,8 @@ interface Room {
  */
 export class RoomManager extends EventEmitter {
   private rooms = new Map<string, Room>();
-  /** Names handed out, so two live agents never collide. */
+  /** Names handed out this fleet's life — never recycled until the fleet fully
+   *  drains, so two rooms can't share an agent slug (and so a sessionId). */
   private usedNames = new Set<string>();
   /** Fan-out quadrant counter for the popped terminals. */
   private terminalCount = 0;
@@ -90,11 +92,30 @@ export class RoomManager extends EventEmitter {
     return undefined;
   }
 
-  private takeNames(count: number): string[] {
-    const free = NAME_POOL.filter((n) => !this.usedNames.has(n));
+  /**
+   * Hand out distinct agent names, monotonically. A name is taken only if it's
+   * neither already in use NOR backed by a live tmux session, and names are NOT
+   * recycled when a single room closes — only when the whole fleet drains (in
+   * kill()). This is what stops two rooms from deriving the same tmux slug, and
+   * so the same deterministic sessionId, which made the second room resume the
+   * first room's claude under a new mission. The live-session check also covers
+   * survivors of a gateway restart (the in-memory set is cleared but the tmux
+   * sessions keep running).
+   */
+  private async takeNames(count: number): Promise<string[]> {
+    const live = await listTmuxSessions();
+    const taken = (n: string) =>
+      this.usedNames.has(n) || live.has(`${config.fleetPrefix}${n}`);
     const picked: string[] = [];
     for (let i = 0; i < count; i++) {
-      const name = free[i] ?? `agent-${this.usedNames.size + i + 1}`;
+      let name = NAME_POOL.find((n) => !taken(n));
+      if (!name) {
+        // Pool exhausted for this fleet's life: a numbered name that is itself
+        // free and not live.
+        let n = 1;
+        while (taken(`agent-${n}`)) n++;
+        name = `agent-${n}`;
+      }
       this.usedNames.add(name);
       picked.push(name);
     }
@@ -106,12 +127,12 @@ export class RoomManager extends EventEmitter {
    * channel creation, agent launches, terminal pops and app focus all run in
    * the background.
    */
-  spawnRoom(input: {
+  async spawnRoom(input: {
     mission: string;
     topic: string;
     agents?: number;
     project?: string;
-  }): string {
+  }): Promise<string> {
     const count = Math.max(1, Math.min(MAX_AGENTS, Math.round(input.agents ?? DEFAULT_AGENTS)));
     const existing = this.findRoom(input.topic);
     if (existing) {
@@ -134,7 +155,7 @@ export class RoomManager extends EventEmitter {
     this.rooms.set(channel, room);
 
     // Show provisional agents the instant the words are spoken.
-    const names = this.takeNames(count);
+    const names = await this.takeNames(count);
     for (const name of names) {
       const slug = `${config.fleetPrefix}${name}`;
       room.agents.set(name, {
@@ -302,13 +323,13 @@ export class RoomManager extends EventEmitter {
   }
 
   /** Add more agents to a room already in flight. */
-  addAgents(input: { topic: string; count?: number }): string {
+  async addAgents(input: { topic: string; count?: number }): Promise<string> {
     const room = this.findRoom(input.topic);
     if (!room) {
       return `No room running for "${input.topic}" yet — I'll start one instead if you want.`;
     }
     const count = Math.max(1, Math.min(MAX_AGENTS, Math.round(input.count ?? 1)));
-    const names = this.takeNames(count);
+    const names = await this.takeNames(count);
     const teammates = [...room.agents.keys(), ...names];
     for (const name of names) {
       const slug = `${config.fleetPrefix}${name}`;
@@ -381,12 +402,28 @@ export class RoomManager extends EventEmitter {
     const room = this.findRoom(topic);
     if (!room) return;
     for (const agent of room.agents.values()) {
+      // Really terminate the session (same call as scripts/reset-rooms.ts): a
+      // survivor would be silently resumed by the next room that reuses the
+      // name. Kill both the launch-reported name and the deterministic slug, in
+      // case they ever differ.
       await kanbanKill(agent.tmuxName);
-      this.usedNames.delete(agent.name);
+      if (agent.slug !== agent.tmuxName) await kanbanKill(agent.slug);
+      // Close the leftover terminal window too, so "kill the room" clears the
+      // dead `tmux attach … [exited]` pane instead of leaving it on screen.
+      await desktop().closeWindow(agent.slug).catch(() => {});
+      // The name is NOT recycled here — only on full drain (below). Its slug,
+      // and so its sessionId, is deterministic, so reusing it while any room
+      // still runs could resume a half-dead session.
     }
     await kanbanChannelDelete(room.channel);
     this.rooms.delete(room.channel);
     this.announcedDone.delete(room.channel);
+    // Whole fleet drained: now it's safe to recycle names + terminal slots, so
+    // the next run reads aria/bolt/cleo again from a clean slate.
+    if (this.rooms.size === 0) {
+      this.usedNames.clear();
+      this.terminalCount = 0;
+    }
     this.emitFleet();
   }
 

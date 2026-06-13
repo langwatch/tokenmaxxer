@@ -270,6 +270,47 @@ windows:
     }
   }
 
+  async closeWindow(key: string): Promise<void> {
+    // A browser window we own: kill its app-instance pid.
+    const browser = this.browserWindows.get(key);
+    if (browser) {
+      this.killPid(browser.pid);
+      this.browserWindows.delete(key);
+    }
+    // A terminal window: close the Warp window carrying this session's title,
+    // then drop its launch config. TARGETED — the matched window's own close
+    // button, never a global Cmd+W — so a loose title match can't take down an
+    // unrelated window. Best-effort: a leftover dead pane is cosmetic.
+    try {
+      await osa(
+        `tell application "System Events"
+           if exists (process "Warp") then
+             tell process "Warp"
+               repeat with w in (every window)
+                 try
+                   if (name of w) contains "${escapeForApplescript(key)}" then
+                     click (first button of w whose subrole is "AXCloseButton")
+                   end if
+                 end try
+               end repeat
+             end tell
+           end if
+         end tell`,
+      );
+    } catch {
+      // best effort
+    }
+    const name = this.warpConfigs.get(key);
+    if (name) {
+      try {
+        fs.rmSync(path.join(WARP_LAUNCH_DIR, `${name}.yaml`), { force: true });
+      } catch {
+        // best effort
+      }
+      this.warpConfigs.delete(key);
+    }
+  }
+
   async closeManaged(): Promise<void> {
     for (const { pid } of this.browserWindows.values()) {
       this.killPid(pid);

@@ -97,6 +97,12 @@ export interface DesktopController {
    */
   focusChannel(channel: string): Promise<void>;
 
+  /**
+   * Close the single managed window for `key` (e.g. an agent's terminal when
+   * its room is torn down), leaving every other room's windows untouched.
+   */
+  closeWindow(key: string): Promise<void>;
+
   /** Tear down windows this controller opened (reset between runs). */
   closeManaged(): Promise<void>;
 }
