@@ -31,11 +31,13 @@ export default function Hud() {
   const orb =
     state.connection === "idle"
       ? "bg-zinc-600"
-      : state.agentTalking
-        ? "bg-fuchsia-400 talking"
-        : state.connection === "live"
-          ? "bg-emerald-400"
-          : "bg-amber-400 talking";
+      : state.muted
+        ? "bg-amber-400"
+        : state.agentTalking
+          ? "bg-fuchsia-400 talking"
+          : state.connection === "live"
+            ? "bg-emerald-400"
+            : "bg-amber-400 talking";
 
   return (
     <div
@@ -59,7 +61,9 @@ export default function Hud() {
               <span className="text-zinc-500">
                 {state.connection === "idle"
                   ? "click to listen"
-                  : "listening…"}
+                  : state.muted
+                    ? "muted — tap mic to talk"
+                    : "listening…"}
               </span>
             )}
           </div>
@@ -75,6 +79,22 @@ export default function Hud() {
             </span>
           </div>
         </div>
+
+        {state.connection !== "idle" && (
+          <button
+            onClick={() => room.setMuted(!state.muted)}
+            title={state.muted ? "Unmute mic" : "Mute mic (push-to-talk for a noisy room)"}
+            aria-label={state.muted ? "Unmute microphone" : "Mute microphone"}
+            className={`shrink-0 rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+              state.muted
+                ? "bg-amber-500 text-white hover:bg-amber-400"
+                : "bg-white/10 text-zinc-200 hover:bg-white/20"
+            }`}
+            style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
+          >
+            {state.muted ? "🔇 muted" : "🎙️ mute"}
+          </button>
+        )}
 
         <button
           onClick={() => (state.connection === "idle" ? void room.start() : room.stop())}

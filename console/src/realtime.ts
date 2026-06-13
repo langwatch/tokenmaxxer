@@ -34,6 +34,7 @@ export type ConnectionState = "idle" | "connecting" | "live" | "reconnecting";
 export interface RoomState {
   connection: ConnectionState;
   agentTalking: boolean;
+  muted: boolean;
   transcript: TranscriptEntry[];
   tools: ToolEntry[];
   fleet: FleetAgentView[];
@@ -56,6 +57,7 @@ export class RoomClient {
   state: RoomState = {
     connection: "idle",
     agentTalking: false,
+    muted: false,
     transcript: [],
     tools: [],
     fleet: [],
@@ -130,7 +132,7 @@ export class RoomClient {
   }
 
   private sendAudio(samples: Float32Array) {
-    if (this.ws?.readyState !== WebSocket.OPEN) return;
+    if (this.state.muted || this.ws?.readyState !== WebSocket.OPEN) return;
     const pcm = new Int16Array(samples.length);
     for (let i = 0; i < samples.length; i++) {
       const s = Math.max(-1, Math.min(1, samples[i]));
@@ -211,7 +213,17 @@ export class RoomClient {
     void this.audioCtx?.close();
     this.audioCtx = null;
     this.playbackNode = null;
-    this.update({ connection: "idle", agentTalking: false });
+    this.update({ connection: "idle", agentTalking: false, muted: false });
+  }
+
+  /**
+   * Mute/unmute the mic. Muted = no audio reaches the gateway, so a noisy room
+   * can't keep the VAD triggering on background sound; the mic track is disabled
+   * too, so the OS shows the mic as off.
+   */
+  setMuted(muted: boolean) {
+    this.mediaStream?.getAudioTracks().forEach((t) => (t.enabled = !muted));
+    this.update({ muted });
   }
 }
 
