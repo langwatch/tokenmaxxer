@@ -11,6 +11,7 @@ import {
   kanbanChannelDelete,
   kanbanChannelHistory,
   kanbanChannelJoinAs,
+  kanbanChannelMembers,
   kanbanChannelSend,
   kanbanKill,
   kanbanLaunch,
@@ -123,6 +124,32 @@ export class RoomManager extends EventEmitter {
   }
 
   /**
+   * Whether a room found in memory is still actually live. An out-of-band
+   * teardown (the reset script) kills the tmux sessions and deletes the channel
+   * but can't touch this process's `rooms` map, leaving a stale entry that would
+   * otherwise swallow a fresh spawn of the same topic. A room counts as live
+   * only if its channel still exists OR an agent's tmux session is still up.
+   */
+  private async roomStillExists(room: Room): Promise<boolean> {
+    if ((await kanbanChannelMembers(room.channel)).length > 0) return true;
+    const live = await listTmuxSessions();
+    return [...room.agents.values()].some(
+      (a) => live.has(a.tmuxName) || live.has(a.slug),
+    );
+  }
+
+  /**
+   * Forget a stale room (torn down out of band): drop it from the map and free
+   * its agent names, so a fresh spawn of the same topic recycles them.
+   */
+  private dropRoom(room: Room): void {
+    for (const agent of room.agents.values()) this.usedNames.delete(agent.name);
+    this.rooms.delete(room.channel);
+    this.announcedDone.delete(room.channel);
+    if (this.rooms.size === 0) this.terminalCount = 0;
+  }
+
+  /**
    * Spin up a brand-new room. Returns immediately with a spoken-friendly ack;
    * channel creation, agent launches, terminal pops and app focus all run in
    * the background.
@@ -135,11 +162,15 @@ export class RoomManager extends EventEmitter {
   }): Promise<string> {
     const count = Math.max(1, Math.min(MAX_AGENTS, Math.round(input.agents ?? DEFAULT_AGENTS)));
     const existing = this.findRoom(input.topic);
-    if (existing) {
+    if (existing && (await this.roomStillExists(existing))) {
       // Same topic, fresh direction: speak into the room instead of forking it.
       void this.broadcastMission(existing, input.mission, "NEW DIRECTION from the room");
       return `That room's already live — passing it along to the ${existing.agents.size} agents on "${existing.topic}".`;
     }
+    // A stale entry left by an out-of-band teardown (reset kills tmux + deletes
+    // the channel but can't reach this process's memory): forget it and spin a
+    // genuinely fresh room below instead of broadcasting into a dead channel.
+    if (existing) this.dropRoom(existing);
 
     const project = resolveExistingProject(input.project ?? input.mission);
     const channel = this.uniqueChannel(input.topic);
