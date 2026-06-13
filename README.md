@@ -11,6 +11,19 @@ chat channel, and self-organize, one claims the CSS foundations, another
 takes the pages, a third reviews. You didn't assign roles. You keep talking;
 they keep working. Compute is unlimited, hesitation is the only cost.
 
+**And it answers in about half a second.** You finish a sentence and the
+terminals are already opening. The realtime voice loop (Inworld gemma-4) runs
+at roughly **500ms** from your voice to the swarm moving, so it feels like
+talking to someone in the room, not typing a command and waiting on a
+spinner.
+
+![Three agents splitting a dark-mode mission between themselves in one shared channel, from a single spoken sentence, with no roles assigned by a human](https://raw.githubusercontent.com/langwatch/pr-screenshots/main/pr-1/swarm-self-organizing.png)
+
+*One spoken "get a few agents on dark mode" and the room fills with named
+agents that divide the work themselves in the channel: one takes the CSS
+foundations and theme toggle, another claims the pages, down to the ~89
+hardcoded colors. Nobody assigned a thing.*
+
 ## It controls your machine, not a tab
 
 tokenmaxxer is not a webpage you build inside, it drives your real desktop.
@@ -38,35 +51,38 @@ listening, on top of everything.
 
 ### Why this wins (the swarm, not a single hidden agent)
 
-- **Agentic leverage** — N independent Claude agents on one mission, plus a
+- **Realtime, not request-and-wait**: ~500ms from your voice to the swarm
+  moving. You steer N agents by talking over them, live, the way you'd brief a
+  team, never a type-a-prompt-and-wait loop.
+- **Agentic leverage**: N independent Claude agents on one mission, plus a
   voice agent listening live to steer them. Not one agent with hidden
   sub-tasks: N real sessions you can see and talk to.
-- **Measurable impact** — 1 agent is one context window on one thread. N
+- **Measurable impact**: 1 agent is one context window on one thread. N
   agents is N context windows working the problem in parallel. Separate
   sessions give you full control of all of them.
-- **The agent loop** — the shared channel is a natural ralph-loop: agents
+- **The agent loop**: the shared channel is a natural ralph-loop: agents
   keep messaging each other, finding issues, and pushing forward. One can
   step up as supervisor. No better loop than agents holding each other to it.
-- **Cost / quality** — because the agents are under your control and visible,
+- **Cost / quality**: because the agents are under your control and visible,
   they don't burn tokens mysteriously doing random things.
-- **Collaboration** — the team guides the swarm by voice, live, together.
-- **Technical ambition** — the desktop layer is built behind a
+- **Collaboration**: the team guides the swarm by voice, live, together.
+- **Technical ambition**: the desktop layer is built behind a
   platform-agnostic adapter so it runs on Windows too, not just macOS.
 
 ## The pieces
 
-- **server/** — voice gateway (OpenAI Realtime-compatible WS, proxies
+- **server/**: voice gateway (OpenAI Realtime-compatible WS, proxies
   Inworld), server-side tool execution, the **room engine**
   (`orchestrator/room.ts`: spawn a swarm into a kanban channel, the
   coordinate-first agent brief, a deterministic project registry), and the
   **desktop control layer** (platform-agnostic `DesktopController`; macOS
   adapter via osascript + Warp + chromeless Chrome; Windows stub for the
   incoming teammate).
-- **hud/** — Electron shell: a frameless, transparent, always-on-top overlay
+- **hud/**: Electron shell, a frameless, transparent, always-on-top overlay
   wrapping the console in HUD mode (reuses the console's mic/audio/WS stack).
-- **console/** — the room console (transcript, tool feed, live fleet) and the
+- **console/**: the room console (transcript, tool feed, live fleet) and the
   compact HUD view (`?hud=1`).
-- **specs/** — BDD feature specs for everything above.
+- **specs/**: BDD feature specs for everything above.
 
 The agents talk over [Kanban Code](https://github.com/langwatch) channels:
 each agent has a tmux session kanban tracks, and a `kanban channel send`
