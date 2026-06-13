@@ -35,6 +35,23 @@ await check("tmux", async () => {
   return stdout.trim();
 });
 
+await check("desktop apps (Chrome + a terminal)", async () => {
+  const has = async (name: string) => {
+    for (const base of ["/Applications", "/System/Applications"]) {
+      try {
+        await exec("test", ["-d", `${base}/${name}.app`]);
+        return true;
+      } catch {
+        // not here
+      }
+    }
+    return false;
+  };
+  if (!(await has("Google Chrome"))) throw new Error("Google Chrome not installed");
+  const term = (await has("Warp")) ? "Warp" : (await has("iTerm")) ? "iTerm" : "Terminal";
+  return `Chrome + ${term}`;
+});
+
 await check("kanban CLI", async () => {
   const { stdout } = await exec("kanban", ["--version"]);
   return stdout.trim();
