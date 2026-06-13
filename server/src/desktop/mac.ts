@@ -66,7 +66,12 @@ export class MacDesktopController implements DesktopController {
     try {
       const region = regionForSlot(opts.slot, await this.screen());
       const existing = this.browserWindows.get(opts.key);
-      if (existing) {
+      // Reuse the window ONLY if its process is still alive. A chromeless app
+      // instance quits when its last window closes, so once the user closes the
+      // page the pid is dead — and raising a dead pid silently does nothing,
+      // which shows up as "open_url fired but no Chrome appeared". When the
+      // entry is stale, fall through and spawn a fresh window.
+      if (existing && this.pidAlive(existing.pid)) {
         if (existing.url === opts.url) {
           // Same page: Vite HMR already pushed any file change into the open
           // window — just raise it to the front.
@@ -76,12 +81,22 @@ export class MacDesktopController implements DesktopController {
         // Different page in the same logical window: close and reopen at the
         // same slot (chromeless app windows don't take navigation commands).
         this.killPid(existing.pid);
-        this.browserWindows.delete(opts.key);
       }
+      if (existing) this.browserWindows.delete(opts.key);
       const pid = this.spawnChromeApp(opts.url, region, opts.key);
       if (pid !== null) this.browserWindows.set(opts.key, { pid, url: opts.url });
     } catch (err) {
       log("desktop", `openBrowser failed: ${(err as Error).message}`);
+    }
+  }
+
+  /** Whether a pid is still running (signal 0 tests existence, kills nothing). */
+  private pidAlive(pid: number): boolean {
+    try {
+      process.kill(pid, 0);
+      return true;
+    } catch {
+      return false;
     }
   }
 
