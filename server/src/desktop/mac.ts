@@ -261,6 +261,11 @@ windows:
 
   async focusChannel(channel: string): Promise<void> {
     try {
+      // Drop the marker KanbanCode drains on activation to auto-select this
+      // channel, written BEFORE we bring the app forward so it's on disk when
+      // applicationDidBecomeActive fires. A plain file (no deep link) keeps the
+      // quit-dialog fix intact; a write failure just means no auto-select.
+      this.writeFocusMarker(channel);
       const region = regionForSlot("top-left", await this.screen());
       // Bring the ALREADY-RUNNING KanbanCode forward via accessibility, NOT the
       // kanbancode:// deep link. The deep link can relaunch a stale registered
@@ -282,6 +287,20 @@ windows:
       log("desktop", `focused board top-left (room #${channel})`);
     } catch (err) {
       log("desktop", `focusChannel failed: ${(err as Error).message}`);
+    }
+  }
+
+  /**
+   * Write the channel slug to the marker KanbanCode reads (and drains) in
+   * applicationDidBecomeActive to auto-select that channel. Best-effort.
+   */
+  private writeFocusMarker(channel: string): void {
+    try {
+      const marker = path.join(os.homedir(), ".kanban-code", "focus-channel");
+      fs.mkdirSync(path.dirname(marker), { recursive: true });
+      fs.writeFileSync(marker, channel);
+    } catch {
+      // best effort — no marker just means no auto-select, never a broken focus
     }
   }
 
