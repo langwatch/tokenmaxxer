@@ -21,5 +21,5 @@ jobs:
       # suites need live APIs, tmux, the kanban CLI or a Mac (see README). The
       # room unit tests (project resolution, channel naming, the agent brief)
       # and the desktop tiler/noop tests are pure.
-      - run: npx vitest run tests/room.unit.test.ts tests/desktop.test.ts
+      - run: npx vitest run tests/room.unit.test.ts tests/intent.unit.test.ts tests/desktop.test.ts
         working-directory: server

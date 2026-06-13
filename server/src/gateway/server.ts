@@ -10,6 +10,7 @@ import { tracer } from "../observability.js";
 import { MAX_GREETING } from "../persona.js";
 import { transcribePcm } from "./stt-shim.js";
 import { executeTool } from "../tools/handlers.js";
+import { correctIntent } from "../tools/intent.js";
 import { buildSessionConfig, type ClientSessionRequest } from "./session-config.js";
 
 /** All connected clients — tokenmaxxer.* events broadcast to every one. */
@@ -46,6 +47,9 @@ class GatewaySession {
   private manualAudioBuf: Buffer[] = [];
   private pendingManualCommit = false;
   private pendingResponseCreate = false;
+  // The user's last spoken turn, used by the deterministic intent safety net
+  // to correct gemma-4's tool pick (it routes room-ops on salient words).
+  private lastUserUtterance = "";
 
   constructor(private client: WebSocket) {
     this.upstream = new InworldUpstream(buildSessionConfig());
@@ -95,6 +99,20 @@ class GatewaySession {
     }
     if (process.env.TOKENMAXXER_WIRE_LOG) {
       log("wire", `client→ ${msg.type}`);
+    }
+
+    // Capture a typed/text user turn for the intent safety net. Audio turns are
+    // captured from their transcription instead (see captureTranscripts and
+    // commitManualTurn); a text turn never gets transcribed, so grab it here.
+    if (msg.type === "conversation.item.create") {
+      const item = (msg as { item?: { role?: string; content?: { type?: string; text?: string }[] } }).item;
+      if (item?.role === "user") {
+        const text = (item.content ?? [])
+          .map((c) => c.text ?? "")
+          .join(" ")
+          .trim();
+        if (text) this.lastUserUtterance = text;
+      }
     }
 
     switch (msg.type) {
@@ -224,6 +242,7 @@ class GatewaySession {
       log("stt-shim", `transcription failed: ${(err as Error).message}`);
     }
     if (!text) text = "[inaudible]";
+    this.lastUserUtterance = text;
     log("gateway", `manual turn transcribed: "${text}"`);
 
     this.upstream.sendRaw({
@@ -301,6 +320,7 @@ class GatewaySession {
     if (evt.type === "conversation.item.input_audio_transcription.completed") {
       const text = String(evt.transcript ?? "").trim();
       if (text) {
+        this.lastUserUtterance = text;
         broadcast({
           type: "tokenmaxxer.transcript",
           role: "user",
@@ -333,6 +353,7 @@ class GatewaySession {
         .join(" ")
         .trim();
       if (text) {
+        this.lastUserUtterance = text;
         broadcast({
           type: "tokenmaxxer.transcript",
           role: "user",
@@ -351,7 +372,23 @@ class GatewaySession {
     } catch {
       // tolerate malformed args; handler validates
     }
-    log("gateway", `tool ${name}(${rawArgs.slice(0, 120)})`);
+
+    // Deterministic intent safety net: gemma-4 mis-picks the room-op tools
+    // (it routes on salient words). When the corrector confidently reads a
+    // different tool from the actual utterance, override the pick and use its
+    // parsed args. Same-tool agreement keeps the model's args (its url for an
+    // open_url is often better than a re-derived hint).
+    const corrected = correctIntent(this.lastUserUtterance);
+    if (corrected && corrected.tool !== name) {
+      log(
+        "gateway",
+        `intent override: ${name} → ${corrected.tool} for "${this.lastUserUtterance.slice(0, 60)}"`,
+      );
+      name = corrected.tool;
+      args = corrected.args;
+    }
+
+    log("gateway", `tool ${name}(${JSON.stringify(args).slice(0, 120)})`);
     broadcast({ type: "tokenmaxxer.tool", phase: "started", id, tool: name, args });
 
     const t0 = Date.now();

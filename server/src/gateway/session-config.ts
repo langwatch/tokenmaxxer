@@ -40,6 +40,11 @@ export function buildSessionConfig(
     model: modelOverride ?? config.inworldModel,
     instructions: MAX_INSTRUCTIONS,
     output_modalities: ["audio"],
+    // Tool routing must be stable: the same sentence has to pick the same tool
+    // every time, or the demo is a coin flip. gemma-4 at its default warmth
+    // routed the same utterance to different tools across runs; 0 makes the
+    // pick deterministic. Max's spoken acks are short, so they don't go robotic.
+    temperature: 0,
     tools: TOOL_SCHEMAS,
     audio: {
       input: {
