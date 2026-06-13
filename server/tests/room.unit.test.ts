@@ -5,9 +5,9 @@
  * included) — no kanban CLI, no tmux, no APIs.
  */
 import { describe, expect, it } from "vitest";
-import { channelName, buildAgentBrief } from "../src/orchestrator/room.js";
+import { channelName, buildAgentBrief } from "../src/orchestrator/brief.js";
 import { resolveProject, DEFAULT_PROJECT_ID } from "../src/orchestrator/projects.js";
-import { resolveOpenUrl } from "../src/tools/handlers.js";
+import { resolveOpenUrl } from "../src/tools/url.js";
 
 describe("topic → channel name", () => {
   it("lowercases, dashes, and trims", () => {
