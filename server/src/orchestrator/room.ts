@@ -9,10 +9,12 @@ import {
   kanbanCapture,
   kanbanChannelCreate,
   kanbanChannelHistory,
+  kanbanChannelMembers,
   kanbanChannelSend,
   kanbanKill,
   kanbanLaunch,
   kanbanSend,
+  waitForClaudeReady,
   MAX_HANDLE,
 } from "./kanban.js";
 import { resolveExistingProject, type Project } from "./projects.js";
@@ -168,6 +170,9 @@ export class RoomManager extends EventEmitter {
   private async launchRoom(room: Room, names: string[]): Promise<void> {
     fs.mkdirSync(room.workspace, { recursive: true });
     await kanbanChannelCreate(room.channel);
+    // Max pins the mission FIRST, so it's already in the channel history each
+    // agent reads when it joins (step 2 of the coordinate-first brief).
+    await this.broadcastMission(room, room.mission, "MISSION");
     // Bring the board forward on this channel so the room is the centre of
     // attention as the agents pour in.
     void desktop().focusChannel(room.channel);
@@ -181,29 +186,47 @@ export class RoomManager extends EventEmitter {
       return;
     }
 
-    await Promise.all(names.map((name) => this.launchAgent(room, name, names)));
-
-    // Max drops the mission into the room himself, so the team has a north
-    // star pinned at the top of the channel.
-    await this.broadcastMission(room, room.mission, "MISSION");
-    // Bring the board back to the front on this channel now that the terminals
-    // have popped — it's the room's focal point: the agents chatting live.
+    await this.launchAgents(room, names, names);
+    // Bring the board back to the front now that the terminals have popped —
+    // it's the room's focal point: the agents chatting live.
     void desktop().focusChannel(room.channel);
     this.startWatcher();
   }
 
-  private async launchAgent(room: Room, name: string, teammates: string[]): Promise<void> {
-    const agent = room.agents.get(name);
-    if (!agent) return;
-    // add_agents reaches launchAgent directly (not just through launchRoom), so
-    // the dry-run short-circuit lives here too — otherwise headless tests of
-    // the add-to-a-live-room path would shell out and spawn real claude agents.
+  /**
+   * Launch a set of agents reliably, in two phases. Phase 1 creates every
+   * tmux session ONE AT A TIME — parallel `kanban launch` calls race and can
+   * collapse two agents onto a single card, so only some ever join. Phase 2
+   * delivers each mission as that agent's claude becomes ready; the slow cold
+   * boots overlap, so this stays fast without re-introducing the race.
+   */
+  private async launchAgents(
+    room: Room,
+    names: string[],
+    teammates: string[],
+  ): Promise<void> {
     if (config.fleetDryRun) {
-      agent.status = "working";
-      agent.lastActivity = "dry-run (no agent launched)";
+      for (const name of names) {
+        const agent = room.agents.get(name);
+        if (agent) {
+          agent.status = "working";
+          agent.lastActivity = "dry-run (no agent launched)";
+        }
+      }
       this.emitFleet();
       return;
     }
+    const launched: string[] = [];
+    for (const name of names) {
+      if (await this.launchSession(room, name)) launched.push(name);
+    }
+    await Promise.all(launched.map((name) => this.deliverMission(room, name, teammates)));
+  }
+
+  /** Phase 1: create the tmux session and pop its terminal. */
+  private async launchSession(room: Room, name: string): Promise<boolean> {
+    const agent = room.agents.get(name);
+    if (!agent) return false;
     try {
       const result = await kanbanLaunch(agent.slug, room.workspace, config.agentModel);
       agent.tmuxName = result.tmuxName;
@@ -213,17 +236,67 @@ export class RoomManager extends EventEmitter {
         key: agent.slug,
         slot: terminalSlotForIndex(this.terminalCount++),
       });
-      // claude needs a beat after launch before the prompt lands reliably.
-      await new Promise((r) => setTimeout(r, 6000));
-      await kanbanSend(result.tmuxName, agentPrompt(room, name, teammates));
-      agent.status = "working";
-      agent.lastActivity = "joined the channel";
+      return true;
     } catch (err) {
       agent.status = "gone";
       agent.lastActivity = `launch failed: ${(err as Error).message}`;
       log("room", `launch ${name} failed: ${(err as Error).message}`);
+      this.emitFleet();
+      return false;
+    }
+  }
+
+  /**
+   * Phase 2: once claude is ready, hand it the coordinate-first mission, then
+   * confirm the agent actually joined the channel. Under load a cold REPL can
+   * still be drawing when the keystrokes arrive and swallow them, so if the
+   * handle hasn't appeared in the channel we wait for ready again and re-send.
+   * The join is the whole point — no join, no visible swarm.
+   */
+  private async deliverMission(
+    room: Room,
+    name: string,
+    teammates: string[],
+  ): Promise<void> {
+    const agent = room.agents.get(name);
+    if (!agent) return;
+    const handle = agent.slug.replace(/[^a-z0-9]+/gi, "_").toLowerCase();
+    const prompt = agentPrompt(room, name, teammates);
+    try {
+      await waitForClaudeReady(agent.tmuxName, 60_000);
+      await kanbanSend(agent.tmuxName, prompt);
+      agent.status = "working";
+      agent.lastActivity = "mission delivered";
+      this.emitFleet();
+
+      if (!(await this.confirmJoined(room.channel, handle, 30_000))) {
+        log("room", `${name} not in #${room.channel} yet — re-sending mission`);
+        await waitForClaudeReady(agent.tmuxName, 30_000);
+        await kanbanSend(agent.tmuxName, prompt);
+        await this.confirmJoined(room.channel, handle, 30_000);
+      }
+      agent.lastActivity = "joined the channel";
+    } catch (err) {
+      agent.status = "gone";
+      agent.lastActivity = `mission delivery failed: ${(err as Error).message}`;
+      log("room", `deliver ${name} failed: ${(err as Error).message}`);
     }
     this.emitFleet();
+  }
+
+  /** Poll channel membership until the agent's handle appears. */
+  private async confirmJoined(
+    channel: string,
+    handle: string,
+    timeoutMs: number,
+  ): Promise<boolean> {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      const members = await kanbanChannelMembers(channel);
+      if (members.some((h) => h.toLowerCase() === handle)) return true;
+      await new Promise((r) => setTimeout(r, 1500));
+    }
+    return false;
   }
 
   /** Speak into an existing room as Max. Returns a spoken ack. */
@@ -262,8 +335,8 @@ export class RoomManager extends EventEmitter {
     }
     this.emitFleet();
     void desktop().focusChannel(room.channel);
-    void Promise.all(names.map((name) => this.launchAgent(room, name, teammates))).catch(
-      (err) => log("room", `add agents failed: ${(err as Error).message}`),
+    void this.launchAgents(room, names, teammates).catch((err) =>
+      log("room", `add agents failed: ${(err as Error).message}`),
     );
     return `Adding ${count} more to "${room.topic}" — ${room.agents.size} agents on it now.`;
   }

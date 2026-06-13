@@ -46,6 +46,34 @@ export async function kanbanCapture(card: string): Promise<string> {
   return stdout;
 }
 
+/** Claude Code's REPL is drawn (input box / footer hints / actively running). */
+const CLAUDE_READY = /\?\s*for shortcuts|bypass permissions|esc to interrupt|❯|│\s*>/i;
+
+/**
+ * Wait until a freshly launched agent's claude REPL is actually ready for
+ * input, instead of guessing with a fixed delay. A cold claude can take
+ * anywhere from 2 to 15+ seconds to draw its prompt; sending the mission
+ * before it's ready means the keystrokes land in the void and the agent never
+ * runs `kanban channel join` — so the swarm never appears in the channel.
+ * Polls the pane and returns true once ready, false on timeout (caller should
+ * send anyway as a best effort).
+ */
+export async function waitForClaudeReady(
+  card: string,
+  timeoutMs = 30_000,
+): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    try {
+      if (CLAUDE_READY.test(await kanbanCapture(card))) return true;
+    } catch {
+      // session may not be attachable yet
+    }
+    await new Promise((r) => setTimeout(r, 700));
+  }
+  return false;
+}
+
 export async function kanbanKill(tmuxName: string): Promise<void> {
   try {
     await exec("tmux", ["kill-session", "-t", tmuxName]);
@@ -76,6 +104,18 @@ export async function kanbanChannelSend(
   await exec("kanban", ["channel", "send", channel, message, "--as", as, "--json"], {
     maxBuffer: 10 * 1024 * 1024,
   });
+}
+
+/** Member handles currently in a channel (e.g. "max", "tmx_aria"). */
+export async function kanbanChannelMembers(channel: string): Promise<string[]> {
+  try {
+    const { stdout } = await exec("kanban", ["channel", "members", channel, "--json"]);
+    return (JSON.parse(stdout) as { handle?: string }[])
+      .map((m) => m.handle ?? "")
+      .filter(Boolean);
+  } catch {
+    return [];
+  }
 }
 
 /** Recent channel history as raw text, for composing a progress report. */
