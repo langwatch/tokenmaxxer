@@ -12,27 +12,47 @@ prototype pages on the room screen at 17,000 tokens per second. Nothing
 waits for the meeting to end. Some of the work gets thrown away. Compute
 is unlimited — hesitation is the only cost.
 
-## Architecture
+## It controls your machine, not a tab
+
+tokenmaxxer is not a webpage you build inside — it's an agent that drives
+your real desktop. Say "landing page for the cat startup" and a real
+browser window pops open at a screen quarter showing it. Say "implement a
+login" and a real Warp terminal opens with Claude Code working in it. When
+work finishes, it tells you and pops the PR — even while you're talking
+about something else. A floating HUD shows the room is listening, on top of
+everything.
 
 ```
- room mic ──► console (browser) ──ws──► gateway (server) ──ws──► Inworld Realtime
-                  ▲    ▲                    │ tool calls          (STT+LLM+TTS, gemma-4)
-                  │    │                    ├─► write_page / edit_page ──► chatjimmy (~17k tok/s)
-   playground ◄───┘    │                    │        └──► playground/src/pages/*.tsx (vite HMR)
-   preview             │                    └─► dispatch_work / check_progress
-                       │                             └──► orchestrator (Claude brain)
-                fleet + tool feed                              └──► kanban CLI ──► tmux ──► N × claude code
+ room mic ──► HUD overlay (Electron) ──ws──► gateway (server, on your Mac)
+              always-on-top, transparent          │  ←ws→ Inworld Realtime (gemma-4)
+                                                   │
+   ┌── desktop control (osascript / Warp) ◄────────┤ tool calls
+   │     • write_page → chromeless Chrome window, tiled, live (Vite HMR)
+   │     • dispatch_work → Warp window, tmux, Claude Code, watch it work
+   │     • done → macOS notification + the PR window, proactively
+   │
+   └── the work appears AROUND the HUD as real windows
+                                                   │
+   page model (switchable) ◄───────────────────────┤ jimmy / gemini / haiku / gemma
+   fleet ◄── orchestrator (Claude brain) ── kanban CLI ── tmux ── N × claude code
 ```
 
-- **server/** — voice gateway (OpenAI Realtime-compatible WS endpoint, proxies
-  Inworld), tool execution, the orchestrator brain, the jimmy speed-codegen
-  client, scenario voice tests.
-- **console/** — the room screen: mic/audio, live transcript, tool activity
-  feed, agent fleet panel, embedded playground preview.
+- **server/** — voice gateway (OpenAI Realtime-compatible WS, proxies
+  Inworld), server-side tool execution, the **desktop control layer**
+  (platform-agnostic `DesktopController`; macOS adapter via osascript +
+  Warp; Windows stub for the incoming teammate), the orchestrator brain,
+  the switchable page-model registry, scenario voice tests.
+- **hud/** — Electron shell: a frameless, transparent, always-on-top overlay
+  wrapping the console in HUD mode (reuses the console's mic/audio/WS stack).
+- **console/** — the room console (full dashboard) and the compact HUD view
+  (`?hud=1`): mic/audio, transcript, tool feed, fleet, model.
 - **playground/** — pre-scaffolded vite + react + tailwind site with
-  file-per-page routing. Written to by jimmy in seconds, deepened by Claude
-  agents in minutes.
+  file-per-page routing. Written by the fast model in seconds, deepened by
+  Claude agents; shown in the real prototype window.
 - **specs/** — BDD feature specs for everything above.
+
+Run the HUD overlay (after `pnpm dev`): `pnpm hud`. Desktop control is on by
+default on macOS; set `TOKENMAXXER_DESKTOP=0` to run headless.
 
 ## Run it
 

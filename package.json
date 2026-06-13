@@ -5,6 +5,7 @@
   "description": "The meeting room that ships while you talk — unlimited compute, unlimited tokens, zero hesitation.",
   "scripts": {
     "dev": "pnpm -r --parallel dev",
+    "hud": "pnpm --filter @tokenmaxxer/hud start",
     "build": "pnpm -r build",
     "test": "pnpm -r test",
     "typecheck": "pnpm -r typecheck"
