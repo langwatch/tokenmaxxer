@@ -54,29 +54,39 @@ export function killRoomAgents(): string[] {
 
 /** Delete every channel except the coordination ones we keep. */
 export function deleteRoomChannels(): string[] {
-  let names: string[] = [];
+  const channelsDir = path.join(os.homedir(), ".kanban-code", "channels");
+  // Clean by NAME from two sources: channels the CLI currently lists, AND the
+  // .jsonl logs on disk. The second matters because a channel that was already
+  // deleted (e.g. by close_room) leaves an orphaned log the CLI no longer
+  // lists — and `channel create` of the same name re-attaches to it, replaying
+  // stale history. Sweeping the directory drops those orphans too.
+  const names = new Set<string>();
   try {
-    names = (JSON.parse(run("kanban", ["channel", "list", "--json"])) as { name: string }[]).map(
-      (r) => r.name,
-    );
+    for (const r of JSON.parse(run("kanban", ["channel", "list", "--json"])) as { name: string }[]) {
+      names.add(r.name);
+    }
   } catch {
     // no channels, or kanban unavailable
   }
+  try {
+    for (const f of fs.readdirSync(channelsDir)) {
+      if (f.endsWith(".jsonl")) names.add(f.slice(0, -".jsonl".length));
+    }
+  } catch {
+    // channels dir missing — nothing on disk to sweep
+  }
   const deleted: string[] = [];
   for (const name of names) {
-    if (!KEEP_CHANNELS.includes(name)) {
-      run("kanban", ["channel", "delete", name, "--json"]);
-      // `channel delete` keeps the append-only log, so a re-created channel of
-      // the same name would replay stale history — drop it for a clean slate.
-      try {
-        fs.rmSync(path.join(os.homedir(), ".kanban-code", "channels", `${name}.jsonl`), {
-          force: true,
-        });
-      } catch {
-        // best effort
-      }
-      deleted.push(name);
+    if (KEEP_CHANNELS.includes(name)) continue;
+    run("kanban", ["channel", "delete", name, "--json"]);
+    // `channel delete` keeps the append-only log, so a re-created channel of
+    // the same name would replay stale history — drop it for a clean slate.
+    try {
+      fs.rmSync(path.join(channelsDir, `${name}.jsonl`), { force: true });
+    } catch {
+      // best effort
     }
+    deleted.push(name);
   }
   return deleted;
 }
