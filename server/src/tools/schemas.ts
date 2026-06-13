@@ -133,6 +133,25 @@ export const TOOL_SCHEMAS = [
   },
   {
     type: "function",
+    name: "close_room",
+    description:
+      "Shut a room down when the team is done with it: kill its agents and " +
+      "clear its channel. Examples: 'kill the dark mode room', 'shut down the " +
+      "login room', 'close that room', 'stop the agents on dark mode', \"we're " +
+      "done with the pricing room\". Frees it up for the next run.",
+    parameters: {
+      type: "object",
+      properties: {
+        topic: {
+          type: "string",
+          description: "The room's workstream label, e.g. 'dark mode'.",
+        },
+      },
+      required: ["topic"],
+    },
+  },
+  {
+    type: "function",
     name: "check_progress",
     description:
       "Answer a QUESTION about how the rooms are doing. Examples: \"how's it " +

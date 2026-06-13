@@ -8,6 +8,7 @@ import { buildAgentBrief, channelName } from "./brief.js";
 import {
   kanbanCapture,
   kanbanChannelCreate,
+  kanbanChannelDelete,
   kanbanChannelHistory,
   kanbanChannelJoinAs,
   kanbanChannelSend,
@@ -171,25 +172,9 @@ export class RoomManager extends EventEmitter {
     fs.mkdirSync(room.workspace, { recursive: true });
     await kanbanChannelCreate(room.channel);
     // Max pins the mission FIRST, so it's already in the channel history each
-    // agent reads when it joins (step 2 of the coordinate-first brief).
+    // agent reads when it joins.
     await this.broadcastMission(room, room.mission, "MISSION");
-    // Bring the board forward on this channel so the room is the centre of
-    // attention as the agents pour in.
-    void desktop().focusChannel(room.channel);
-
-    if (config.fleetDryRun) {
-      for (const agent of room.agents.values()) {
-        agent.status = "working";
-        agent.lastActivity = "dry-run (no agent launched)";
-      }
-      this.emitFleet();
-      return;
-    }
-
     await this.launchAgents(room, names, names);
-    // Bring the board back to the front now that the terminals have popped —
-    // it's the room's focal point: the agents chatting live.
-    void desktop().focusChannel(room.channel);
     this.startWatcher();
   }
 
@@ -216,15 +201,31 @@ export class RoomManager extends EventEmitter {
       this.emitFleet();
       return;
     }
+    // Phase 1: create each session, force-join the channel, pop its terminal —
+    // sequential so the kanban CLI launches don't race.
+    const terminalOpens: Promise<void>[] = [];
     const launched: string[] = [];
     for (const name of names) {
-      if (await this.launchSession(room, name)) launched.push(name);
+      if (await this.launchSession(room, name, terminalOpens)) launched.push(name);
     }
-    await Promise.all(launched.map((name) => this.deliverMission(room, name, teammates)));
+    // Once the terminals have finished drawing, raise the board ON TOP of them
+    // (and the team's own windows). This must be awaited and last — a `void`
+    // raise races the terminal pops and loses, leaving the board buried.
+    await Promise.allSettled(terminalOpens);
+    await desktop().focusChannel(room.channel);
+    // Phase 2: deliver missions in the background. No window ops here, so the
+    // board stays on top while claude boots.
+    void Promise.all(
+      launched.map((name) => this.deliverMission(room, name, teammates)),
+    ).catch((err) => log("room", `deliver failed: ${(err as Error).message}`));
   }
 
   /** Phase 1: create the tmux session, force-join the channel, pop the terminal. */
-  private async launchSession(room: Room, name: string): Promise<boolean> {
+  private async launchSession(
+    room: Room,
+    name: string,
+    terminalOpens: Promise<void>[],
+  ): Promise<boolean> {
     const agent = room.agents.get(name);
     if (!agent) return false;
     try {
@@ -242,12 +243,17 @@ export class RoomManager extends EventEmitter {
           log("room", `force-join ${name} failed: ${(err as Error).message}`);
         }
       }
-      void desktop().openTerminal({
-        command: `tmux attach -t ${result.tmuxName}`,
-        title: agent.slug,
-        key: agent.slug,
-        slot: terminalSlotForIndex(this.terminalCount++),
-      });
+      // Collected so the board raise can wait for every terminal to settle.
+      terminalOpens.push(
+        desktop()
+          .openTerminal({
+            command: `tmux attach -t ${result.tmuxName}`,
+            title: agent.slug,
+            key: agent.slug,
+            slot: terminalSlotForIndex(this.terminalCount++),
+          })
+          .catch(() => {}),
+      );
       return true;
     } catch (err) {
       agent.status = "gone";
@@ -320,7 +326,6 @@ export class RoomManager extends EventEmitter {
       });
     }
     this.emitFleet();
-    void desktop().focusChannel(room.channel);
     void this.launchAgents(room, names, teammates).catch((err) =>
       log("room", `add agents failed: ${(err as Error).message}`),
     );
@@ -360,6 +365,18 @@ export class RoomManager extends EventEmitter {
     return parts.join("\n\n");
   }
 
+  /** Tear a room down by voice: kill its agents and delete its channel. */
+  closeRoom(topic: string): string {
+    const room = this.findRoom(topic);
+    if (!room) return `No room running for "${topic}" — nothing to close.`;
+    const count = room.agents.size;
+    const label = room.topic;
+    void this.kill(label).catch((err) =>
+      log("room", `close ${label} failed: ${(err as Error).message}`),
+    );
+    return `Shutting down the "${label}" room — killing ${count} agent${count === 1 ? "" : "s"}.`;
+  }
+
   async kill(topic: string): Promise<void> {
     const room = this.findRoom(topic);
     if (!room) return;
@@ -367,7 +384,9 @@ export class RoomManager extends EventEmitter {
       await kanbanKill(agent.tmuxName);
       this.usedNames.delete(agent.name);
     }
+    await kanbanChannelDelete(room.channel);
     this.rooms.delete(room.channel);
+    this.announcedDone.delete(room.channel);
     this.emitFleet();
   }
 

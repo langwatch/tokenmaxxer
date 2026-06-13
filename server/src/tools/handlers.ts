@@ -58,6 +58,13 @@ const handlers: Record<string, Handler> = {
     };
   },
 
+  async close_room(args) {
+    const topic = String(args.topic ?? "").trim();
+    if (!topic) throw new Error("close_room needs a topic");
+    const note = rooms.closeRoom(topic);
+    return { output: { status: "closing", note } };
+  },
+
   async check_progress(args) {
     const scope = String(args.scope ?? "all");
     const report = await rooms.progressReport(scope);

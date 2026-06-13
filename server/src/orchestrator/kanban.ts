@@ -159,6 +159,15 @@ export async function kanbanChannelJoinAs(
   ]);
 }
 
+/** Delete a channel (its history file is left behind by the CLI). */
+export async function kanbanChannelDelete(channel: string): Promise<void> {
+  try {
+    await exec("kanban", ["channel", "delete", channel, "--json"]);
+  } catch (err) {
+    log("kanban", `channel delete ${channel} failed: ${(err as Error).message}`);
+  }
+}
+
 /** Bring the KanbanCode app forward, focused on a channel (deep link). */
 export async function kanbanChannelOpen(channel: string): Promise<void> {
   try {

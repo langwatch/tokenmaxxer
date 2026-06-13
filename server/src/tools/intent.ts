@@ -79,6 +79,9 @@ const ADD_RE =
 const TELL_RE =
   /\b(?:tell|remind|message|warn|nudge)\b[^.?!]*\b(?:room|team|agents?|them)\b|\b(?:let them know|have them|ask them|let the [a-z0-9 -]+ room)\b/;
 
+const KILL_RE =
+  /\b(?:kill|shut down|shutdown|close|tear down|disband|wind down|stop)\b[^.?!]*\b(?:room|agents?|swarm|team)\b|\bwe'?re done with\b/;
+
 const SHOW_RE =
   /\b(?:show me|pull up|bring up|put\b[^.?!]*\bon (?:the )?screen|throw\b[^.?!]*\bon (?:the )?screen|let'?s see|open (?:the |up )?(?:repo|repository|site|website|issue|pr|page|dashboard|link))\b/;
 
@@ -98,6 +101,11 @@ export function correctIntent(utterance: string): Intent | null {
   // room doing" must not be mistaken for an add/steer.)
   if (STATUS_RE.test(u)) {
     return { tool: "check_progress", args: { scope: extractTopic(u) ?? "all" } };
+  }
+
+  // Tear a room down.
+  if (KILL_RE.test(u)) {
+    return { tool: "close_room", args: { topic: extractTopic(u) ?? "" } };
   }
 
   // More agents on an existing room.

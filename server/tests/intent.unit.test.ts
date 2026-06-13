@@ -69,6 +69,27 @@ describe("intent corrector — the steer/status/show cases gemma fumbles", () =>
   });
 });
 
+describe("intent corrector — tearing a room down", () => {
+  it("'kill the dark mode room' -> close_room on dark mode", () => {
+    const r = correctIntent("Kill the dark mode room.");
+    expect(r?.tool).toBe("close_room");
+    expect(r?.args.topic).toBe("dark mode");
+  });
+  it("'shut down the login room' -> close_room on login", () => {
+    const r = correctIntent("Shut down the login room.");
+    expect(r?.tool).toBe("close_room");
+    expect(r?.args.topic).toBe("login");
+  });
+  it("'stop the agents on dark mode' -> close_room", () => {
+    expect(correctIntent("Stop the agents on dark mode.")?.tool).toBe("close_room");
+  });
+  it("does not fire on a normal status question", () => {
+    expect(correctIntent("How's it going in the dark mode room?")?.tool).toBe(
+      "check_progress",
+    );
+  });
+});
+
 describe("intent corrector — leaves real work to the model (returns null)", () => {
   const workRequests = [
     "Get five agents on a full dark mode for the website.",
