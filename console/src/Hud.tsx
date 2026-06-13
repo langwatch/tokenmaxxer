@@ -83,6 +83,16 @@ export default function Hud() {
         >
           {state.connection === "idle" ? "listen" : "stop"}
         </button>
+
+        <button
+          onClick={() => window.close()}
+          title="Close the HUD (reopen with: pnpm hud)"
+          aria-label="Close"
+          className="shrink-0 rounded-md px-1.5 py-1.5 text-sm leading-none text-zinc-500 transition hover:bg-white/10 hover:text-zinc-100"
+          style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
+        >
+          ✕
+        </button>
       </div>
     </div>
   );

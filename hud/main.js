@@ -6,6 +6,10 @@
  * the proven mic / playback / WebSocket stack verbatim — the Electron shell
  * only adds the floating-window behaviour. Cross-platform by construction:
  * the same shell runs on Windows once the desktop adapter lands there.
+ *
+ * Closing: the bar has an ✕ button, and Cmd/Ctrl+Q or Cmd/Ctrl+W also quit
+ * (a frameless overlay has no menu bar to hang a Quit item on). Reopen any
+ * time with `pnpm hud`.
  */
 const { app, BrowserWindow, screen, session } = require("electron");
 
@@ -13,9 +17,12 @@ const CONSOLE_URL = process.env.TOKENMAXXER_CONSOLE_URL ?? "http://localhost:517
 const HUD_WIDTH = 460;
 const HUD_HEIGHT = 132;
 
+/** @type {BrowserWindow | null} */
+let hud = null;
+
 function createHud() {
   const { workArea } = screen.getPrimaryDisplay();
-  const win = new BrowserWindow({
+  hud = new BrowserWindow({
     width: HUD_WIDTH,
     height: HUD_HEIGHT,
     // Bottom-centre, just above the dock.
@@ -37,28 +44,53 @@ function createHud() {
   });
 
   // Float above full-screen apps and show on every Space.
-  win.setAlwaysOnTop(true, "screen-saver");
-  win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  hud.setAlwaysOnTop(true, "screen-saver");
+  hud.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
 
-  win.loadURL(`${CONSOLE_URL}/?hud=1`);
-  return win;
+  // There is no menu bar on this overlay, so wire the usual quit shortcuts
+  // by hand: Cmd/Ctrl+Q and Cmd/Ctrl+W both close it.
+  hud.webContents.on("before-input-event", (event, input) => {
+    const mod = input.meta || input.control;
+    if (mod && (input.key === "q" || input.key === "w")) {
+      event.preventDefault();
+      app.quit();
+    }
+  });
+
+  hud.on("closed", () => {
+    hud = null;
+  });
+
+  hud.loadURL(`${CONSOLE_URL}/?hud=1`);
+  return hud;
 }
 
-app.whenReady().then(() => {
-  // Auto-grant the microphone so the room starts listening without a prompt.
-  session.defaultSession.setPermissionRequestHandler((_wc, permission, cb) => {
-    cb(permission === "media");
+// One HUD at a time: a second `pnpm hud` should focus the existing overlay,
+// not stack another transparent window on top of it.
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
+} else {
+  app.on("second-instance", () => {
+    if (!hud) return;
+    if (hud.isMinimized()) hud.restore();
+    hud.show();
+    hud.focus();
   });
 
-  createHud();
+  app.whenReady().then(() => {
+    // Auto-grant the microphone so the room starts listening without a prompt.
+    session.defaultSession.setPermissionRequestHandler((_wc, permission, cb) => {
+      cb(permission === "media");
+    });
 
-  app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0) createHud();
+    createHud();
+
+    app.on("activate", () => {
+      if (BrowserWindow.getAllWindows().length === 0) createHud();
+    });
   });
-});
+}
 
-// The HUD is a background overlay — keep running when its window is closed
-// only matters on macOS; quit elsewhere.
-app.on("window-all-closed", () => {
-  if (process.platform !== "darwin") app.quit();
-});
+// The overlay is the whole app — when its window closes (✕ button or
+// Cmd+Q/W), quit for real on every platform.
+app.on("window-all-closed", () => app.quit());

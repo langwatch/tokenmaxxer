@@ -9,6 +9,10 @@ pnpm dev          # gateway :4870 + console :5170 + playground :5171
 pnpm hud          # the floating always-on-top listening HUD (Electron)
 ```
 
+Close the HUD with the **✕** on the bar (or Cmd+Q / Cmd+W); reopen any time
+with `pnpm hud`. Running `pnpm hud` again just focuses the existing one
+instead of stacking a second window.
+
 Start these FRESH right before the demo — vite dev servers that have been
 running for hours can wedge their tailwind CSS pipeline (pages render
 unstyled until restarted).
