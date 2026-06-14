@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&amp;family=Geist+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  @keyframes tmblink { 0%, 48% { opacity: 1; } 49%, 100% { opacity: 0; } }
+  @keyframes tmpulse { 0%, 100% { opacity: 0.35; transform: scale(1); } 50% { opacity: 1; transform: scale(1.12); } }
+</style>
+</helmet>
+<x-import component-from-global-scope="deck-stage" from="./deck-stage.js" width="1920" height="1080" hint-size="100%,100%" data-uneditable="">
+
+  <section data-label="Title" data-screen-label="01 Title" data-speaker-notes="We just showed you the demo. This is tokenmaxxer — an always-listening voice orchestrator. The hackathon theme: what if compute and tokens were no longer a limitation. Our answer: you just talk, and it builds." style="background:#15262C; color:#EAEDE8; font-family:'Geist',sans-serif; padding:96px 110px; display:flex; flex-direction:column; justify-content:space-between;">
+    <div style="display:flex; align-items:center; gap:18px;">
+      <span style="display:inline-flex; align-items:center; justify-content:center; width:58px; height:58px; background:#EAEDE8; border-radius:13px;"><img src="assets/langwatch-mark.gif" alt="langwatch" style="height:38px; width:auto; display:block;"></span>
+      <span style="font-family:'Geist Mono',monospace; font-size:24px; letter-spacing:0.2em; text-transform:uppercase; color:#8BA09A; white-space:nowrap;">langwatch &nbsp;·&nbsp; hackathon</span>
+    </div>
+    <div>
+      <h1 style="margin:0; font-size:122px; font-weight:600; letter-spacing:-0.035em; line-height:0.95; white-space:nowrap;">tokenmaxxer</h1>
+      <div style="margin-top:30px; font-size:46px; font-weight:400; color:#EAEDE8;">You talk. <span style="color:#5BD6B6;">It builds.</span></div>
+      <p style="margin:22px 0 0; font-size:29px; line-height:1.45; color:#A9BCB6; max-width:1080px;">An always-listening voice agent that spins up an unlimited swarm of agents as you speak — and shows you the work, live, on your screen.</p>
+    </div>
+    <div style="font-family:'Geist Mono',monospace; font-size:26px; letter-spacing:0.04em; color:#6E8884;">“ what if compute and tokens were no longer a limitation? ”</div>
+  </section>
+
+  <section data-label="The agent loop" data-screen-label="04 The loop" data-speaker-notes="Why is this such a good agent loop? Start with what an agent loop even is. Tokens, Turns, Tasks, Teams. Five nested loops, each exiting on a different signal, each running at a different timescale — from seconds to infinity." style="background:#F3F3EE; color:#1B2A30; font-family:'Geist',sans-serif; padding:74px 110px; display:flex; flex-direction:column; justify-content:space-between;">
+    <div style="display:flex; justify-content:space-between; align-items:baseline;">
+      <span style="font-family:'Geist Mono',monospace; font-size:24px; letter-spacing:0.2em; text-transform:uppercase; color:#8A9089;">// the agent loop</span>
+      <span style="font-family:'Geist Mono',monospace; font-size:24px; letter-spacing:0.1em; color:#B7B5AC;">04 — 14</span>
+    </div>
+    <div style="display:flex; align-items:center; gap:18px; font-family:'Geist Mono',monospace; font-size:26px; font-weight:500;">
+      <span>Tokens</span><span style="color:#B7B5AC;">→</span>
+      <span>Turns</span><span style="color:#B7B5AC;">→</span>
+      <span>Tasks</span><span style="color:#B7B5AC;">→</span>
+      <span style="color:#0E7C66;">?????</span>
+      <span style="font-size:24px; color:#9AA098; letter-spacing:0.04em; margin-left:8px;">= nested loops, each with its own exit</span>
+    </div>
+    <div style="position:relative; height:120px; margin:0; z-index:3;">
+      <svg width="560" height="240" style="position:absolute; left:4px; top:0; overflow:visible;">
+        <defs>
+          <marker id="tmhead" viewBox="0 0 10 10" markerWidth="6" markerHeight="6" refX="8" refY="5" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="#0E7C66"></path>
+          </marker>
+        </defs>
+        <line x1="248" y1="52" x2="148" y2="214" stroke="#0E7C66" stroke-width="7" marker-end="url(#tmhead)"></line>
+      </svg>
+      <span style="position:absolute; left:262px; top:22px; font-size:48px; font-weight:800; color:#0E7C66; letter-spacing:-0.015em; white-space:nowrap;">THIS is what we're solving</span>
+    </div>
+    <div style="border:2px solid #0E7C66; border-radius:18px; padding:24px 30px; position:relative; z-index:1;">
+    <div style="border:2px solid #0E7C66; border-radius:18px; padding:24px 30px;">
+      <div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:18px;">
+        <span style="font-size:26px;"><b style="color:#0E7C66;">5 · ?????</b> &nbsp;<span style="color:#6B7A78;">set goals, allocate, cull</span></span>
+        <span style="font-family:'Geist Mono',monospace; font-size:19px; color:#0E7C66;">∞ · open exploration</span>
+      </div>
+      <div style="border:1px solid #C9C7BE; border-radius:14px; padding:22px 28px;">
+        <div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:16px;">
+          <span style="font-size:23px;"><b>4 · MetaLoop</b> &nbsp;<span style="color:#6B7A78;">spawn, review, respawn</span></span>
+          <span style="font-family:'Geist Mono',monospace; font-size:18px; color:#8A9089;">≈ days</span>
+        </div>
+        <div style="border:1px solid #C9C7BE; border-radius:12px; padding:22px 28px;">
+          <div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:16px;">
+            <span style="font-size:23px;"><b>3 · Goal</b> &nbsp;<span style="color:#6B7A78;">run, judge, retry</span></span>
+            <span style="font-family:'Geist Mono',monospace; font-size:18px; color:#8A9089;">≈ hours</span>
+          </div>
+          <div style="border:1px solid #C9C7BE; border-radius:12px; padding:22px 28px;">
+            <div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:16px;">
+              <span style="font-size:23px;"><b>2 · Turn</b> &nbsp;<span style="color:#6B7A78;">call tool, feed result</span></span>
+              <span style="font-family:'Geist Mono',monospace; font-size:18px; color:#8A9089;">≈ minutes</span>
+            </div>
+            <div style="border:1px dashed #C0A88E; background:#F7F1E9; border-radius:10px; padding:18px 24px;">
+              <div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:14px;">
+                <span style="font-size:22px;"><b>1 · Token</b> &nbsp;<span style="color:#8A7A66;">sample, append, repeat</span></span>
+                <span style="font-family:'Geist Mono',monospace; font-size:18px; color:#A6845F;">≈ seconds</span>
+              </div>
+              <div style="display:flex; gap:12px;">
+                <span style="font-family:'Geist Mono',monospace; font-size:20px; background:#FBFBF8; border:1px solid #D9D8CE; border-radius:8px; padding:8px 16px;">the</span>
+                <span style="font-family:'Geist Mono',monospace; font-size:20px; background:#FBFBF8; border:1px solid #D9D8CE; border-radius:8px; padding:8px 16px;">cat</span>
+                <span style="font-family:'Geist Mono',monospace; font-size:20px; background:#FBFBF8; border:1px solid #D9D8CE; border-radius:8px; padding:8px 16px;">sat</span>
+                <span style="display:inline-block; width:14px; height:36px; background:#A6845F; border-radius:3px; animation:tmblink 1.1s steps(1) infinite;"></span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section><section data-label="Premise" data-screen-label="02 Premise" data-speaker-notes="The whole idea in one line. We sit down for a day of work, have meetings, throw ideas around. The agent listens in, talks back, and behind the scenes spins up agents and does the work. It doesn't matter how many, or how many tokens — compute is infinite." style="background:#F3F3EE; color:#1B2A30; font-family:'Geist',sans-serif; padding:90px 110px; display:flex; flex-direction:column; justify-content:space-between;">
+    <div style="display:flex; justify-content:space-between; align-items:baseline;">
+      <span style="font-family:'Geist Mono',monospace; font-size:24px; letter-spacing:0.2em; text-transform:uppercase; color:#8A9089;">// the premise</span>
+      <span style="font-family:'Geist Mono',monospace; font-size:24px; letter-spacing:0.1em; color:#B7B5AC;">02 — 14</span>
+    </div>
+    <div style="max-width:1480px;">
+      <h2 style="margin:0; font-size:84px; font-weight:600; letter-spacing:-0.025em; line-height:1.04;">Sit down. Start talking.<br><span style="color:#0E7C66;">Watch it build.</span></h2>
+      <p style="margin:40px 0 0; font-size:32px; line-height:1.5; color:#3A4D54; max-width:1240px;">No prompts, no typing. A meeting room with a microphone — and an agent that turns the conversation into running software while the conversation is still happening.</p>
+    </div>
+    <div style="display:flex; gap:56px; font-family:'Geist Mono',monospace; font-size:24px; color:#6B7A78;">
+      <span>unlimited agents</span>
+      <span style="color:#C9C7BE;">/</span>
+      <span>unlimited tokens</span>
+      <span style="color:#C9C7BE;">/</span>
+      <span>thrown-away work is fine</span>
+    </div>
+  </section>
+
+  <section data-label="The stack" data-screen-label="03 Architecture" data-speaker-notes="The architecture. Inworld is the realtime voice. Nemotron watches every agent session and is the orchestrator that reports back to the people in the room. It spins up Claude Code agents in tmux. Those agents talk to each other through kanban — a shared chat channel. And it drives the real machine: a page request opens a real browser, heavy work opens a real Warp terminal." style="background:#F3F3EE; color:#1B2A30; font-family:'Geist',sans-serif; padding:90px 110px; display:flex; flex-direction:column; justify-content:space-between;">
+    <div style="display:flex; justify-content:space-between; align-items:baseline;">
+      <span style="font-family:'Geist Mono',monospace; font-size:24px; letter-spacing:0.2em; text-transform:uppercase; color:#8A9089;">// the stack</span>
+      <span style="font-family:'Geist Mono',monospace; font-size:24px; letter-spacing:0.1em; color:#B7B5AC;">03 — 14</span>
+    </div>
+    <div>
+      <h2 style="margin:0 0 52px; font-size:64px; font-weight:600; letter-spacing:-0.02em;">The stack</h2>
+      <div style="display:flex; align-items:stretch; gap:0;">
+        <div style="flex:1; background:#FBFBF8; border:1px solid #D9D8CE; border-radius:14px; padding:30px 28px;">
+          <div style="font-family:'Geist Mono',monospace; font-size:22px; color:#0E7C66; letter-spacing:0.1em;">01</div>
+          <div style="margin-top:14px; font-size:30px; font-weight:600;">The room</div>
+          <div style="margin-top:8px; font-size:24px; color:#6B7A78; line-height:1.4;">humans talking, ideas flying</div>
+        </div>
+        <div style="display:flex; align-items:center; padding:0 18px; font-size:30px; color:#B7B5AC;">→</div>
+        <div style="flex:1; background:#FBFBF8; border:1px solid #D9D8CE; border-radius:14px; padding:30px 28px;">
+          <div style="font-family:'Geist Mono',monospace; font-size:22px; color:#0E7C66; letter-spacing:0.1em;">02</div>
+          <div style="margin-top:14px; font-size:30px; font-weight:600;">Inworld</div>
+          <div style="margin-top:8px; font-size:24px; color:#6B7A78; line-height:1.4;">realtime voice in / out · ~600ms</div>
+        </div>
+        <div style="display:flex; align-items:center; padding:0 18px; font-size:30px; color:#B7B5AC;">↔</div>
+        <div style="flex:1.05; background:#FBFBF8; border:1px solid #D9D8CE; border-radius:14px; padding:30px 28px;">
+          <div style="font-family:'Geist Mono',monospace; font-size:22px; color:#0E7C66; letter-spacing:0.1em;">03 · ×N</div>
+          <div style="margin-top:14px; font-size:30px; font-weight:600;">Claude Code</div>
+          <div style="margin-top:8px; font-size:24px; color:#6B7A78; line-height:1.4;">long-lived agents in tmux + Warp</div>
+        </div>
+      </div>
+      <div style="position:relative; height:198px; margin-top:6px;">
+        <div style="position:absolute; left:49.3%; top:2px; width:2px; height:126px; background:#0E7C66; opacity:0.75;"></div>
+        <div style="position:absolute; left:49.3%; top:-12px; transform:translateX(-50%); color:#0E7C66; font-size:24px; line-height:1;">↑</div>
+        <div style="position:absolute; left:49.3%; width:4.5%; top:127px; height:2px; background:#0E7C66; opacity:0.75;"></div>
+        <div style="position:absolute; left:84.2%; top:2px; width:2px; height:126px; background:#0E7C66; opacity:0.75;"></div>
+        <div style="position:absolute; left:84.2%; top:-12px; transform:translateX(-50%); color:#0E7C66; font-size:24px; line-height:1;">↑</div>
+        <div style="position:absolute; left:79.8%; width:4.4%; top:127px; height:2px; background:#0E7C66; opacity:0.75;"></div>
+        <div style="position:absolute; left:53.8%; right:20.2%; top:60px; background:#15262C; border-radius:14px; padding:22px 30px; color:#EAEDE8; text-align:center;">
+          <div style="font-family:'Geist Mono',monospace; font-size:22px; color:#5BD6B6; letter-spacing:0.1em;">NVIDIA · the assistant</div>
+          <div style="margin-top:10px; font-size:30px; font-weight:600;">Nemotron</div>
+          <div style="margin-top:6px; font-size:24px; color:#A9BCB6; line-height:1.4;">watches both, reports back</div>
+        </div>
+      </div>
+      <div style="margin-top:22px; display:flex; align-items:center; gap:16px; background:#ECECE4; border:1px dashed #C9C7BE; border-radius:12px; padding:20px 28px;">
+        <span style="font-family:'Geist Mono',monospace; font-size:24px; letter-spacing:0.14em; text-transform:uppercase; color:#0E7C66;">kanban</span>
+        <span style="font-size:23px; color:#3A4D54;">the shared chat channel — every agent talks to every other agent through it.</span>
+      </div>
+    </div>
+    <div style="font-size:24px; color:#6B7A78; line-height:1.4;">It drives your actual machine: a page request opens a real browser, heavy work opens a real terminal — on your screen, as you speak.</div>
+  </section>
+
+  
+
+  <section data-label="The 5th loop" data-screen-label="05 The 5th loop" data-speaker-notes="Loops 1 through 4 run inside a single agent — they're basically solved. The fifth loop, Teams, runs across a whole team of agents. Nobody automates that. That's the loop we run." style="background:#15262C; color:#EAEDE8; font-family:'Geist',sans-serif; padding:90px 110px; display:flex; flex-direction:column; justify-content:space-between;">
+    <div style="display:flex; justify-content:space-between; align-items:baseline;">
+      <span style="font-family:'Geist Mono',monospace; font-size:24px; letter-spacing:0.2em; text-transform:uppercase; color:#7E948A;">// loop 5</span>
+      <span style="font-family:'Geist Mono',monospace; font-size:24px; letter-spacing:0.1em; color:#3A555C;">05 — 14</span>
+    </div>
+    <div style="max-width:1480px;">
+      <div style="font-family:'Geist Mono',monospace; font-size:24px; letter-spacing:0.04em; color:#5BD6B6;">loops 1–4 live inside one agent — solved</div>
+      <h2 style="margin:24px 0 0; font-size:88px; font-weight:600; letter-spacing:-0.03em; line-height:1.02;">The 5th loop?<br>Humans in a <span style="color:#5BD6B6;">room</span>.</h2>
+      <p style="margin:36px 0 0; font-size:32px; line-height:1.5; color:#A9BCB6; max-width:1240px;">Set goals, allocate, cull, keep exploring — the one loop with no exit signal. No single agent runs it. The humans in the room do, out loud — and tokenmaxxer makes the room the orchestrator.</p>
+    </div>
+    <div style="display:flex; gap:48px; font-family:'Geist Mono',monospace; font-size:22px; color:#8BA09A;">
+      <span>set goals</span><span style="color:#3A555C;">·</span>
+      <span>allocate</span><span style="color:#3A555C;">·</span>
+      <span>cull</span><span style="color:#3A555C;">·</span>
+      <span style="color:#5BD6B6;">∞ open exploration</span>
+    </div>
+  </section>
+
+  <section data-label="Self-organize" data-screen-label="06 Self-organize" data-speaker-notes="Here's the big realization, from building this way ourselves at langwatch. Put a bunch of agents in a chat room and they self-organize better than any structure we'd impose. They define their own rules, elect a leader, split the work. We didn't design the org chart — they did." style="background:#F3F3EE; color:#1B2A30; font-family:'Geist',sans-serif; padding:90px 110px; display:flex; flex-direction:column; justify-content:space-between;">
+    <div style="display:flex; justify-content:space-between; align-items:baseline; position:relative; z-index:5;">
+      <span style="font-family:'Geist Mono',monospace; font-size:24px; letter-spacing:0.2em; text-transform:uppercase; color:#8A9089;">// the realization</span>
+      <span style="font-family:'Geist Mono',monospace; font-size:24px; letter-spacing:0.1em; color:#B7B5AC;">06 — 14</span>
+    </div>
+    <div style="position:absolute; left:110px; top:50%; transform:translateY(-50%); width:560px; z-index:2;">
+      <h2 style="margin:0; font-size:48px; font-weight:600; letter-spacing:-0.025em; line-height:1.12;">Agents self-organize <span style="color:#0E7C66;">better than we'd organize them.</span></h2>
+      <div style="margin-top:28px; display:flex; gap:11px; flex-wrap:wrap;">
+        <span style="font-size:24px; background:#FBFBF8; border:1px solid #D9D8CE; border-radius:999px; padding:9px 20px;">define their own rules</span>
+        <span style="font-size:24px; background:#FBFBF8; border:1px solid #D9D8CE; border-radius:999px; padding:9px 20px;">elect a leader</span>
+        <span style="font-size:24px; background:#FBFBF8; border:1px solid #D9D8CE; border-radius:999px; padding:9px 20px;">split the work</span>
+        <span style="font-size:24px; background:#FBFBF8; border:1px solid #D9D8CE; border-radius:999px; padding:9px 20px;">review each other</span>
+      </div>
+      <div style="margin-top:28px; font-size:25px; color:#3A4D54;">We didn't design the org chart. <span style="color:#1B2A30; font-weight:600;">They did.</span></div>
+    </div>
+    <img src="assets/agents-chatroom.png" alt="tokenmaxxer agents self-organizing in a shared chat channel" style="position:absolute; left:700px; top:50%; transform:translateY(-50%); height:90%; width:auto; border-radius:18px; border:1px solid #D9D8CE; box-shadow:0 30px 80px -36px rgba(20,38,44,0.6); z-index:1;">
+  </section>
+
+  <section data-label="Improve &amp; remember" data-screen-label="07 Ralph loops" data-speaker-notes="And they keep getting better, on their own. Finishing a task posts to the chat, which wakes the next agent — a natural loop. They give each other feedback: spot a bug, double-check, fix it together. And memory comes for free — at around 500k tokens an agent compacts itself, capturing what it learned and what to do next. The chat history plus the monorepo is the team's shared long-term memory." style="background:#F3F3EE; color:#1B2A30; font-family:'Geist',sans-serif; padding:90px 110px; display:flex; flex-direction:column; justify-content:space-between;">
+    <div style="display:flex; justify-content:space-between; align-items:baseline;">
+      <span style="font-family:'Geist Mono',monospace; font-size:24px; letter-spacing:0.2em; text-transform:uppercase; color:#8A9089;">// natural ralph-loops</span>
+      <span style="font-family:'Geist Mono',monospace; font-size:24px; letter-spacing:0.1em; color:#B7B5AC;">07 — 14</span>
+    </div>
+    <div>
+      <h2 style="margin:0; font-size:64px; font-weight:600; letter-spacing:-0.02em;">Natural Ralph-Loops.</h2>
+      <p style="margin:16px 0 0; font-size:30px; line-height:1.45; color:#3A4D54; max-width:1480px;">An agent finishes, posts to the chat, and that message wakes the next one. The loop runs itself — and never stops.</p>
+    </div>
+    <div style="display:flex; gap:28px;">
+      <div style="flex:1; background:#FBFBF8; border:1px solid #D9D8CE; border-radius:16px; padding:36px 34px;">
+        <div style="font-family:'Geist Mono',monospace; font-size:24px; letter-spacing:0.12em; color:#0E7C66;">FEEDBACK LOOPS</div>
+        <p style="margin:18px 0 0; font-size:27px; line-height:1.5; color:#3A4D54;">One agent spots another's bug, they double-check it, and fix the problem together — constant peer review.</p>
+      </div>
+      <div style="flex:1; background:#FBFBF8; border:1px solid #D9D8CE; border-radius:16px; padding:36px 34px;">
+        <div style="font-family:'Geist Mono',monospace; font-size:24px; letter-spacing:0.12em; color:#0E7C66;">SELF-COMPACTION</div>
+        <p style="margin:18px 0 0; font-size:27px; line-height:1.5; color:#3A4D54;">At ~500k tokens an agent compacts itself — capturing the lessons learned and what to do next. Compaction <i>is</i> learning.</p>
+      </div>
+      <div style="flex:1; background:#FBFBF8; border:1px solid #D9D8CE; border-radius:16px; padding:36px 34px;">
+        <div style="font-family:'Geist Mono',monospace; font-size:24px; letter-spacing:0.12em; color:#0E7C66;">SHARED MEMORY</div>
+        <p style="margin:18px 0 0; font-size:27px; line-height:1.5; color:#3A4D54;">The chat history + one monorepo is the team's long-term memory. A new agent reads it and catches up instantly.</p>
+      </div>
+    </div>
+    <div style="font-size:25px; color:#6B7A78;">Long-lived agents that never die — so every loop above compounds.</div>
+  </section>
+
+  <section data-label="How we work" data-screen-label="08 How we work" data-speaker-notes="And here's why we trust it — this is already how we build at LangWatch. Our agents self-organize in shared channels to ship real product work. tokenmaxxer is our own way of working, turned up to infinity." style="background:#15262C; color:#EAEDE8; font-family:'Geist',sans-serif; padding:90px 110px; display:flex; flex-direction:column; justify-content:space-between;">
+    <div style="display:flex; justify-content:space-between; align-items:baseline;">
+      <span style="font-family:'Geist Mono',monospace; font-size:24px; letter-spacing:0.2em; text-transform:uppercase; color:#7E948A;">// our own experience</span>
+      <span style="font-family:'Geist Mono',monospace; font-size:24px; letter-spacing:0.1em; color:#3A555C;">08 — 14</span>
+    </div>
+    <div style="max-width:1520px;">
+      <h2 style="margin:0; font-size:72px; font-weight:600; letter-spacing:-0.03em; line-height:1.06;">Agent chat rooms are <span style="color:#5BD6B6;">already how we build</span> at LangWatch.</h2>
+      <p style="margin:32px 0 0; font-size:31px; line-height:1.5; color:#A9BCB6; max-width:1320px;">This isn't new for us — it's our daily workflow. At the hackathon we solved the two missing pieces: the outer loop that runs the whole team, and live, real-time collaboration by voice.</p>
+    </div>
+    <div style="display:flex; align-items:center; gap:16px; flex-wrap:wrap;">
+      <span style="font-family:'Geist Mono',monospace; font-size:24px; letter-spacing:0.04em; color:#6E8884; margin-right:6px;">real channels, real work →</span>
+      <span style="font-family:'Geist Mono',monospace; font-size:24px; background:#1C3138; border:1px solid #2E454C; border-radius:999px; padding:11px 24px; color:#A9BCB6;">#langwatch-ai-gateway</span>
+      <span style="font-family:'Geist Mono',monospace; font-size:24px; background:#1C3138; border:1px solid #2E454C; border-radius:999px; padding:11px 24px; color:#A9BCB6;">#langwatch-nlp-go-migration</span>
+      <span style="font-family:'Geist Mono',monospace; font-size:24px; background:#1C3138; border:1px solid #2E454C; border-radius:999px; padding:11px 24px; color:#A9BCB6;">#langwatch-npx</span>
+      <span style="font-family:'Geist Mono',monospace; font-size:24px; background:#1C3138; border:1px solid #2E454C; border-radius:999px; padding:11px 24px; color:#A9BCB6;">#bugfixes</span>
+    </div>
+  </section>
+
+  <section data-label="Tested" data-screen-label="09 Evals" data-speaker-notes="None of this is vibes. Every voice agent was tested end-to-end with LangWatch scenario simulations — real voice in, real voice out, judged. 42 passing runs. And we ran a delegation experiment to prove the routing: which requests go to a fast model versus a full Claude session." style="background:#F3F3EE; color:#1B2A30; font-family:'Geist',sans-serif; padding:90px 110px; display:flex; flex-direction:column; justify-content:space-between;">
+    <div style="display:flex; justify-content:space-between; align-items:baseline;">
+      <span style="font-family:'Geist Mono',monospace; font-size:24px; letter-spacing:0.2em; text-transform:uppercase; color:#8A9089;">// proof</span>
+      <span style="font-family:'Geist Mono',monospace; font-size:24px; letter-spacing:0.1em; color:#B7B5AC;">09 — 14</span>
+    </div>
+    <div style="display:flex; align-items:flex-end; justify-content:space-between; gap:40px;">
+      <h2 style="margin:0; font-size:64px; font-weight:600; letter-spacing:-0.02em;">Not vibes. Tested.</h2>
+      <div style="font-size:25px; color:#6B7A78; max-width:560px; text-align:right; line-height:1.45;">Every voice agent run end-to-end through LangWatch scenarios — real audio, judged.</div>
+    </div>
+    <div style="display:flex; gap:30px;">
+      <div style="flex:1.25; background:#FBFBF8; border:1px solid #D9D8CE; border-radius:16px; overflow:hidden;">
+        <div style="display:flex; align-items:center; justify-content:space-between; padding:16px 24px; border-bottom:1px solid #ECECE4;">
+          <span style="font-family:'Geist Mono',monospace; font-size:18px; color:#6B7A78;">langwatch · simulations</span>
+          <span style="font-family:'Geist Mono',monospace; font-size:18px; color:#0E7C66;">42 passed ✓</span>
+        </div>
+        <img src="assets/eval-simulations.png" alt="LangWatch simulations, 42 passed" style="display:block; width:100%; height:430px; object-fit:cover; object-position:top;">
+      </div>
+      <div style="flex:1; background:#FBFBF8; border:1px solid #D9D8CE; border-radius:16px; overflow:hidden;">
+        <div style="display:flex; align-items:center; justify-content:space-between; padding:16px 24px; border-bottom:1px solid #ECECE4;">
+          <span style="font-family:'Geist Mono',monospace; font-size:18px; color:#6B7A78;">delegation routing</span>
+          <span style="font-family:'Geist Mono',monospace; font-size:18px; color:#0E7C66;">page vs. team</span>
+        </div>
+        <img src="assets/eval-delegation.png" alt="Delegation routing experiment" style="display:block; width:100%; height:430px; object-fit:cover; object-position:top left;">
+      </div>
+    </div>
+  </section>
+
+  <section data-label="Fast" data-screen-label="10 Benchmark" data-speaker-notes="This is the page-codegen benchmark — eight briefs per model. ChatJimmy, the quantized Llama, drafts in about a second at lower quality, 0.69 — that's the speed play. The smart models cluster from seven to eighteen seconds at point-nine-plus quality. Nemotron, NVIDIA's 550-billion reasoning model, is the big-iron end at thirty seconds — too slow for this job. We draft fast, the agents deepen it." style="background:#F3F3EE; color:#1B2A30; font-family:'Geist',sans-serif; padding:90px 110px; display:flex; flex-direction:column; justify-content:space-between;">
+    <div style="display:flex; justify-content:space-between; align-items:baseline;">
+      <span style="font-family:'Geist Mono',monospace; font-size:24px; letter-spacing:0.2em; text-transform:uppercase; color:#8A9089;">// benchmark · page codegen</span>
+      <span style="font-family:'Geist Mono',monospace; font-size:24px; letter-spacing:0.1em; color:#B7B5AC;">10 — 14</span>
+    </div>
+    <div>
+      <div style="display:flex; align-items:flex-end; justify-content:space-between; margin-bottom:24px;">
+        <h2 style="margin:0; font-size:54px; font-weight:600; letter-spacing:-0.02em;">Speed vs. quality.</h2>
+        <span style="font-size:24px; color:#6B7A78;">page-codegen benchmark · 8 briefs per model</span>
+      </div>
+      <div style="display:flex; align-items:center; gap:20px; padding:0 4px 12px; border-bottom:2px solid #1B2A30; font-family:'Geist Mono',monospace; font-size:20px; letter-spacing:0.12em; text-transform:uppercase; color:#A0A69C;">
+        <span style="width:300px;">model</span>
+        <span style="flex:1;"></span>
+        <span style="width:140px; text-align:right;">p50</span>
+        <span style="width:250px; text-align:right;">quality 0–1</span>
+      </div>
+      <div style="display:flex; align-items:center; gap:20px; padding:13px 4px; border-bottom:1px solid #D9D8CE;">
+        <span style="width:300px; font-size:26px; font-weight:600; color:#0E7C66;">ChatJimmy</span>
+        <span style="flex:1; font-size:24px; color:#6B7A78;">Llama 3.1 8B q · ~17k tok/s · the speed play</span>
+        <span style="width:140px; text-align:right; font-family:'Geist Mono',monospace; font-size:30px; font-weight:600; color:#0E7C66;">1.2s</span>
+        <span style="width:250px; display:flex; align-items:center; gap:14px;"><span style="font-family:'Geist Mono',monospace; font-size:24px; width:52px;">0.69</span><span style="flex:1; height:9px; background:#E4E2D8; border-radius:5px; overflow:hidden;"><span style="display:block; height:100%; width:69%; background:#C58A3E; border-radius:5px;"></span></span></span>
+      </div>
+      <div style="display:flex; align-items:center; gap:20px; padding:13px 4px; border-bottom:1px solid #D9D8CE;">
+        <span style="width:300px; font-size:26px; font-weight:600;">Inworld gemma-4</span>
+        <span style="flex:1; font-size:24px; color:#6B7A78;">the voice model itself</span>
+        <span style="width:140px; text-align:right; font-family:'Geist Mono',monospace; font-size:30px; font-weight:600;">6.9s</span>
+        <span style="width:250px; display:flex; align-items:center; gap:14px;"><span style="font-family:'Geist Mono',monospace; font-size:24px; width:52px;">0.93</span><span style="flex:1; height:9px; background:#E4E2D8; border-radius:5px; overflow:hidden;"><span style="display:block; height:100%; width:93%; background:#0E7C66; border-radius:5px;"></span></span></span>
+      </div>
+      <div style="display:flex; align-items:center; gap:20px; padding:13px 4px; border-bottom:1px solid #D9D8CE;">
+        <span style="width:300px; font-size:26px; font-weight:600;">Gemini 2.5 Flash</span>
+        <span style="flex:1; font-size:24px; color:#6B7A78;">reasoning off</span>
+        <span style="width:140px; text-align:right; font-family:'Geist Mono',monospace; font-size:30px; font-weight:600;">9.7s</span>
+        <span style="width:250px; display:flex; align-items:center; gap:14px;"><span style="font-family:'Geist Mono',monospace; font-size:24px; width:52px;">0.93</span><span style="flex:1; height:9px; background:#E4E2D8; border-radius:5px; overflow:hidden;"><span style="display:block; height:100%; width:93%; background:#0E7C66; border-radius:5px;"></span></span></span>
+      </div>
+      <div style="display:flex; align-items:center; gap:20px; padding:13px 4px; border-bottom:1px solid #D9D8CE;">
+        <span style="width:300px; font-size:26px; font-weight:600;">Claude Haiku 4.5</span>
+        <span style="flex:1; font-size:24px; color:#6B7A78;"></span>
+        <span style="width:140px; text-align:right; font-family:'Geist Mono',monospace; font-size:30px; font-weight:600;">13.7s</span>
+        <span style="width:250px; display:flex; align-items:center; gap:14px;"><span style="font-family:'Geist Mono',monospace; font-size:24px; width:52px;">0.91</span><span style="flex:1; height:9px; background:#E4E2D8; border-radius:5px; overflow:hidden;"><span style="display:block; height:100%; width:91%; background:#0E7C66; border-radius:5px;"></span></span></span>
+      </div>
+      <div style="display:flex; align-items:center; gap:20px; padding:13px 4px; border-bottom:1px solid #D9D8CE;">
+        <span style="width:300px; font-size:26px; font-weight:600;">GPT-4.1 mini</span>
+        <span style="flex:1; font-size:24px; color:#6B7A78;"></span>
+        <span style="width:140px; text-align:right; font-family:'Geist Mono',monospace; font-size:30px; font-weight:600;">18.5s</span>
+        <span style="width:250px; display:flex; align-items:center; gap:14px;"><span style="font-family:'Geist Mono',monospace; font-size:24px; width:52px;">0.91</span><span style="flex:1; height:9px; background:#E4E2D8; border-radius:5px; overflow:hidden;"><span style="display:block; height:100%; width:91%; background:#0E7C66; border-radius:5px;"></span></span></span>
+      </div>
+      <div style="display:flex; align-items:center; gap:20px; padding:13px 4px;">
+        <span style="width:300px; font-size:26px; font-weight:600;">Nemotron-3 Ultra 550B</span>
+        <span style="flex:1; font-size:24px; color:#6B7A78;">NVIDIA 550B reasoning · the big-iron end</span>
+        <span style="width:140px; text-align:right; font-family:'Geist Mono',monospace; font-size:30px; font-weight:600; color:#A6845F;">30.9s</span>
+        <span style="width:250px; display:flex; align-items:center; gap:14px;"><span style="font-family:'Geist Mono',monospace; font-size:24px; width:52px;">0.91</span><span style="flex:1; height:9px; background:#E4E2D8; border-radius:5px; overflow:hidden;"><span style="display:block; height:100%; width:91%; background:#0E7C66; border-radius:5px;"></span></span></span>
+      </div>
+    </div>
+    <div style="font-size:27px; color:#3A4D54;">ChatJimmy's <span style="font-weight:600; color:#1B2A30;">1.2s is the speed play</span> — instant drafts the agents then deepen. Nemotron's 550B reasoning is the big-iron end: too slow for this.</div>
+  </section>
+
+  <section data-label="Cost · quality" data-screen-label="11 Cost-quality" data-speaker-notes="And it's efficient. Because you steer the agents, they don't burn tokens mysteriously doing random work. And long-lived agents keep their cache warm and the whole codebase in context the whole time — short-lived agents re-read everything on every run. Long-running easily wins." style="background:#15262C; color:#EAEDE8; font-family:'Geist',sans-serif; padding:90px 110px; display:flex; flex-direction:column; justify-content:space-between;">
+    <div style="display:flex; justify-content:space-between; align-items:baseline;">
+      <span style="font-family:'Geist Mono',monospace; font-size:24px; letter-spacing:0.2em; text-transform:uppercase; color:#7E948A;">// cost · quality</span>
+      <span style="font-family:'Geist Mono',monospace; font-size:24px; letter-spacing:0.1em; color:#3A555C;">11 — 14</span>
+    </div>
+    <h2 style="margin:0; font-size:66px; font-weight:600; letter-spacing:-0.025em; line-height:1.04;">Infinite compute, <span style="color:#5BD6B6;">spent on purpose.</span></h2>
+    <div style="display:flex; gap:28px;">
+      <div style="flex:1; background:#1C3138; border:1px solid #2E454C; border-radius:16px; padding:36px 34px;">
+        <div style="font-family:'Geist Mono',monospace; font-size:24px; letter-spacing:0.1em; color:#5BD6B6;">STEERED, NOT GUESSING</div>
+        <p style="margin:18px 0 0; font-size:27px; line-height:1.5; color:#A9BCB6;">You guide the work by voice — so agents don't wander off burning tokens on random stuff.</p>
+      </div>
+      <div style="flex:1; background:#1C3138; border:1px solid #2E454C; border-radius:16px; padding:36px 34px;">
+        <div style="font-family:'Geist Mono',monospace; font-size:24px; letter-spacing:0.1em; color:#5BD6B6;">WARM CACHE WINS</div>
+        <p style="margin:18px 0 0; font-size:27px; line-height:1.5; color:#A9BCB6;">Long-lived agents keep the cache hot and the whole codebase in context — endlessly. Short-lived agents re-read everything, every run. Long-running easily trumps them.</p>
+      </div>
+    </div>
+    <div style="font-size:25px; color:#8BA09A;">More control, less waste — even when the tokens are free.</div>
+  </section>
+
+  <section data-label="Windows + Thanks" data-screen-label="12 Close" data-speaker-notes="And just to show how technically ambitious we are — we even tried to make it work on Windows. Thank you." style="background:#15262C; color:#EAEDE8; font-family:'Geist',sans-serif; padding:96px 110px; display:flex; flex-direction:column; justify-content:space-between;">
+    <div style="display:flex; justify-content:space-between; align-items:baseline;">
+      <span style="font-family:'Geist Mono',monospace; font-size:72px; letter-spacing:0.08em; text-transform:uppercase; color:#7E948A;">// technical ambition</span>
+      <span style="font-family:'Geist Mono',monospace; font-size:24px; letter-spacing:0.1em; color:#3A555C;">12 — 14</span>
+    </div>
+    <div style="max-width:1480px;">
+      <h2 style="margin:0; font-size:128px; font-weight:600; letter-spacing:-0.035em; line-height:1.0;">We even tried to make<br>it work on <span style="color:#5BD6B6;">Windows.</span></h2>
+      <p style="margin:32px 0 0; font-size:30px; color:#A9BCB6;">That's how <i>technically ambitious</i> we are. Thank you.</p>
+    </div>
+    <div style="display:flex; align-items:center; justify-content:space-between;">
+      <div style="font-size:40px; font-weight:600; letter-spacing:-0.02em;">tokenmaxxer</div>
+      <div style="display:flex; align-items:center; gap:16px;">
+        <span style="display:inline-flex; align-items:center; justify-content:center; width:52px; height:52px; background:#EAEDE8; border-radius:12px;"><img src="assets/langwatch-mark.gif" alt="langwatch" style="height:34px; width:auto; display:block;"></span>
+        <span style="font-family:'Geist Mono',monospace; font-size:20px; letter-spacing:0.18em; text-transform:uppercase; color:#8BA09A;">langwatch</span>
+      </div>
+    </div>
+  </section><section data-label="Collaboration" data-screen-label="13 Collaboration" data-speaker-notes="And it's collaborative. The whole team steers the agents live, by voice — very collab, very demure. And the rooms are remote-friendly: anyone can connect in from anywhere and work with their agents. It's how we run our QAs." style="background:#F3F3EE; color:#1B2A30; font-family:'Geist',sans-serif; padding:90px 110px; display:flex; flex-direction:column; justify-content:space-between;">
+    <div style="display:flex; justify-content:space-between; align-items:baseline;">
+      <span style="font-family:'Geist Mono',monospace; font-size:24px; letter-spacing:0.2em; text-transform:uppercase; color:#8A9089;">// collaboration</span>
+      <span style="font-family:'Geist Mono',monospace; font-size:24px; letter-spacing:0.1em; color:#B7B5AC;">13 — 14</span>
+    </div>
+    <div style="display:flex; gap:64px; align-items:center; margin:auto 0;">
+      <div style="flex:0 0 42%; max-width:42%;">
+        <h2 style="margin:0; font-size:66px; font-weight:600; letter-spacing:-0.025em; line-height:1.05;">Very collab,<br><span style="color:#0E7C66;">very demure.</span></h2>
+        <p style="margin:30px 0 0; font-size:29px; line-height:1.5; color:#3A4D54;">The team steers the agents live, by voice — same room, thinking out loud.</p>
+        <p style="margin:22px 0 0; font-size:29px; line-height:1.5; color:#3A4D54;">And the rooms are remote-friendly: connect in from anywhere and work with your agents. It's how we run our QAs.</p>
+      </div>
+      <div style="flex:1; min-width:0;">
+        <img src="assets/team-collab.jpg" alt="the LangWatch team collaborating at the hackathon" style="display:block; width:100%; height:580px; object-fit:cover; border-radius:18px; border:1px solid #D9D8CE; box-shadow:0 30px 80px -36px rgba(20,38,44,0.6);">
+      </div>
+    </div>
+  </section>
+
+  <section data-label="DGX" data-screen-label="14 Close" data-speaker-notes="" style="background:#0B0B0B; display:flex; align-items:center; justify-content:center; padding:0; overflow:hidden;">
+    <img src="assets/closing-meme.png" alt="" style="max-width:100%; max-height:100%; width:auto; height:100%; object-fit:contain; display:block;">
+  </section>
+
+    
+
+</x-import>
+</x-dc>
+</body>
+</html>
