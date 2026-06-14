@@ -31,6 +31,12 @@ const NAME_POOL = [
 
 const DEFAULT_AGENTS = 3;
 const MAX_AGENTS = 10;
+/**
+ * How long a freshly spawned room is treated as live for repeat spawn_room calls
+ * on the same topic. A cold-booting room (agents still at 0 tokens) looks dead,
+ * which otherwise tempts a respawn loop that tears the in-flight launches down.
+ */
+const ROOM_RESPAWN_COOLDOWN_MS = 60_000;
 
 interface RoomAgent extends FleetAgentView {
   tmuxName: string;
@@ -162,15 +168,21 @@ export class RoomManager extends EventEmitter {
   }): Promise<string> {
     const count = Math.max(1, Math.min(MAX_AGENTS, Math.round(input.agents ?? DEFAULT_AGENTS)));
     const existing = this.findRoom(input.topic);
-    if (existing && (await this.roomStillExists(existing))) {
-      // Same topic, fresh direction: speak into the room instead of forking it.
-      void this.broadcastMission(existing, input.mission, "NEW DIRECTION from the room");
-      return `That room's already live — passing it along to the ${existing.agents.size} agents on "${existing.topic}".`;
+    if (existing) {
+      // A room that's still cold-booting looks dead (agents idle at 0 tokens),
+      // which tempts a re-ask into a respawn loop that tears the in-flight
+      // launches down ("Card not found" / "Card has no tmux session"). So while a
+      // room is fresh, OR still has live sessions, absorb any repeat spawn as a
+      // new direction for the SAME room: never fork it or tear it down.
+      const fresh = Date.now() - existing.createdAt < ROOM_RESPAWN_COOLDOWN_MS;
+      if (fresh || (await this.roomStillExists(existing))) {
+        void this.broadcastMission(existing, input.mission, "NEW DIRECTION from the room");
+        return `That room's already live, passing it along to the ${existing.agents.size} agents on "${existing.topic}".`;
+      }
+      // Genuinely stale (old AND no live sessions, e.g. an out-of-band reset
+      // killed tmux + deleted the channel): forget it and spin a fresh room.
+      this.dropRoom(existing);
     }
-    // A stale entry left by an out-of-band teardown (reset kills tmux + deletes
-    // the channel but can't reach this process's memory): forget it and spin a
-    // genuinely fresh room below instead of broadcasting into a dead channel.
-    if (existing) this.dropRoom(existing);
 
     const project = resolveExistingProject(input.project ?? input.mission);
     const channel = this.uniqueChannel(input.topic);
@@ -226,6 +238,10 @@ export class RoomManager extends EventEmitter {
     // Max pins the mission FIRST, so it's already in the channel history each
     // agent reads when it joins.
     await this.broadcastMission(room, room.mission, "MISSION");
+    // Pop the board up front, before any terminals, so the room appears
+    // instantly. The terminals then fan out around it, and the final raise in
+    // launchAgents brings it back on top once they've tiled.
+    await desktop().focusChannel(room.channel);
     await this.launchAgents(room, names, names);
     this.startWatcher();
   }
@@ -253,31 +269,28 @@ export class RoomManager extends EventEmitter {
       this.emitFleet();
       return;
     }
-    // Phase 1: create each session, force-join the channel, pop its terminal —
-    // sequential so the kanban CLI launches don't race.
-    const terminalOpens: Promise<void>[] = [];
+    // Phase 1: create each session, force-join the channel, pop its terminal.
+    // Sequential so the kanban CLI launches don't race on links.json.
     const launched: string[] = [];
     for (const name of names) {
-      if (await this.launchSession(room, name, terminalOpens)) launched.push(name);
+      if (await this.launchSession(room, name)) launched.push(name);
     }
-    // Once the terminals have finished drawing, raise the board ON TOP of them
-    // (and the team's own windows). This must be awaited and last — a `void`
-    // raise races the terminal pops and loses, leaving the board buried.
-    await Promise.allSettled(terminalOpens);
-    await desktop().focusChannel(room.channel);
-    // Phase 2: deliver missions in the background. No window ops here, so the
-    // board stays on top while claude boots.
+    // Phase 2: deliver each mission as that agent's claude becomes ready. No
+    // window ops here, so delivery overlaps the terminal pops instead of waiting
+    // behind them: each mission lands the moment that REPL is up.
     void Promise.all(
       launched.map((name) => this.deliverMission(room, name, teammates)),
     ).catch((err) => log("room", `deliver failed: ${(err as Error).message}`));
+    // Terminals are fire-and-forget (their tiling settles in the background), so
+    // we never wait on them. A short beat lets the Warp windows draw, then snap
+    // the board back on top of the fanned-out terminals. The early raise in
+    // launchRoom already put it up; this reclaims the top once they've appeared.
+    await new Promise((r) => setTimeout(r, 300));
+    await desktop().focusChannel(room.channel);
   }
 
   /** Phase 1: create the tmux session, force-join the channel, pop the terminal. */
-  private async launchSession(
-    room: Room,
-    name: string,
-    terminalOpens: Promise<void>[],
-  ): Promise<boolean> {
+  private async launchSession(room: Room, name: string): Promise<boolean> {
     const agent = room.agents.get(name);
     if (!agent) return false;
     try {
@@ -295,17 +308,16 @@ export class RoomManager extends EventEmitter {
           log("room", `force-join ${name} failed: ${(err as Error).message}`);
         }
       }
-      // Collected so the board raise can wait for every terminal to settle.
-      terminalOpens.push(
-        desktop()
-          .openTerminal({
-            command: `tmux attach -t ${result.tmuxName}`,
-            title: agent.slug,
-            key: agent.slug,
-            slot: terminalSlotForIndex(this.terminalCount++),
-          })
-          .catch(() => {}),
-      );
+      // Pop the terminal fire-and-forget: the window appears fast and its tiling
+      // settles in the background, so a slow a11y poll never blocks the launch.
+      void desktop()
+        .openTerminal({
+          command: `tmux attach -t ${result.tmuxName}`,
+          title: agent.slug,
+          key: agent.slug,
+          slot: terminalSlotForIndex(this.terminalCount++),
+        })
+        .catch(() => {});
       return true;
     } catch (err) {
       agent.status = "gone";

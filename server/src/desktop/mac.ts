@@ -229,8 +229,9 @@ windows:
   private async positionFrontWindow(
     processName: string,
     region: ScreenRegion,
+    maxTries = 14,
   ): Promise<void> {
-    for (let attempt = 0; attempt < 14; attempt++) {
+    for (let attempt = 0; attempt < maxTries; attempt++) {
       try {
         await osa(
           `tell application "System Events" to tell process "${processName}"
@@ -283,7 +284,10 @@ windows:
       // Pin the board to the top-left quarter so it's the room's focal point
       // while terminals fan out below and the screen sits top-right.
       await delay(300);
-      await this.positionFrontWindow(KANBAN_APP_PROCESS, region);
+      // The board window already exists (we never relaunch the app), so a few
+      // tries is plenty: attempt 1 lands when accessibility is granted, and a
+      // miss fails fast in ~1s instead of stalling the spawn flow for ~5.6s.
+      await this.positionFrontWindow(KANBAN_APP_PROCESS, region, 3);
       log("desktop", `focused board top-left (room #${channel})`);
     } catch (err) {
       log("desktop", `focusChannel failed: ${(err as Error).message}`);
