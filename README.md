@@ -123,3 +123,5 @@ the channel and coordinate BEFORE building, that ordering is the whole
 delegation contract). The scenario voice tests and the delegation experiment
 eval drive the real gateway with audio and a judge; they need live APIs, the
 kanban CLI, and tmux, so they run locally, not in CI.
+
+> Note: the `kanban` CLI now ships natively on Windows too — see [langwatch/kanban-code#98](https://github.com/langwatch/kanban-code/pull/98) and [#105](https://github.com/langwatch/kanban-code/pull/105). The Windows desktop adapter (`server/src/desktop/windows.ts`) is the last seam to fill.
